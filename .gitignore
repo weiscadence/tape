@@ -1,0 +1,21 @@
+node_modules/
+
+# The tape itself. A clone must start EMPTY, not with our record pre-loaded — an operator
+# who inherits our entries cannot tell their own first anchor from ours, and any number
+# they compute would be a mix of two chains. `bin/doctor.js` reports "0 entries" on a fresh
+# clone and that is the correct starting state.
+data/
+
+# Local run artifacts.
+*.log
+.env
+.DS_Store
+
+# NEVER. Key material lives outside the repo by design (see THREAT-MODEL.md); these
+# patterns exist so a stray copy cannot be committed by accident rather than because
+# anything here is expected to appear.
+*.key
+*-key.json
+*wallet*.json
+*keypair*.json
+.config/

@@ -1,0 +1,70 @@
+# ~/.zeroclaw/config.toml — minimal reproducible config for TAPE on ZeroClaw v0.8.3.
+# This is the annotated skeleton; a real config also carries the defaults `zeroclaw
+# config migrate` fills in. Secrets are redacted — never commit a real key.
+#
+# CUSTODY TIER T1: the agent holds ONE hot key (faucet-wallet.json) that can only write
+# memo transactions. It never holds user funds and never signs a transfer or a swap.
+
+schema_version = 3
+
+# --- provider -------------------------------------------------------------------
+# Any ZeroClaw-supported provider works. Gemini free tier is 5 req/min, which is fine
+# because the ANCHOR path uses no model at all — only the chat-facing agent does.
+[providers.models.gemini.default]
+api_key = "<GEMINI_API_KEY>"
+model = "gemini-2.5-flash"
+
+# --- skill bundle ---------------------------------------------------------------
+# Resolves to ~/.zeroclaw/shared/skills/tape/. Provides tape_post/anchor/receipt/verify.
+[skill_bundles.tape]
+
+[skills]
+allow_scripts = false   # tools call `node` directly; no shell scripts on disk to audit
+
+# --- SOP (agent-facing deterministic pipeline) ----------------------------------
+[sop]
+sops_dir = "/home/ubuntu/.zeroclaw/data/sops"
+maintenance_interval_secs = 60          # non-zero REQUIRED or in-SOP cron never fires
+default_execution_mode = "deterministic"
+
+# --- interval anchoring: a SHELL cron job, NOT the SOP's own trigger ------------
+# A SOP run needs a live agent loop to execute its steps; a channel-less daemon has
+# none, so the run stalls and (max_concurrent=1) its lease swallows the next tick.
+# The anchor pipeline must never depend on a model being reachable or a quota unspent.
+[cron.tape-anchor]
+name = "TAPE interval anchor"
+job_type = "shell"
+command = "node /ABSOLUTE/PATH/projects/tape/bin/daemon.js --once"
+enabled = true
+[cron.tape-anchor.schedule]
+kind = "cron"
+expr = "*/15 * * * *"
+tz = "UTC"
+
+# --- channel --------------------------------------------------------------------
+[channels.telegram.tape]
+enabled = true                          # defaults false on purpose
+bot_token = "<TELEGRAM_BOT_TOKEN>"
+
+# --- narrow risk profile --------------------------------------------------------
+# Deliberately tight, not "supervised off". One binary, two roots, four auto-approved
+# tools. HONEST LIMIT: allowed_roots constrains ZeroClaw's OWN file tools, NOT a child
+# `node` process — that runs as the host user and can read the anchor key. The real
+# containment is that a memo-only T1 key holds nothing worth stealing.
+[risk_profiles.tape]
+level = "supervised"
+workspace_only = false
+allowed_commands = ["node"]
+allowed_roots = ["/ABSOLUTE/PATH/projects/tape", "/tmp"]
+auto_approve = ["tape__tape_post", "tape__tape_anchor", "tape__tape_receipt", "tape__tape_verify"]
+require_approval_for_medium_risk = false
+block_high_risk_commands = true
+
+# --- agent ----------------------------------------------------------------------
+[agents.tape]
+enabled = true
+model_provider = "gemini.default"
+risk_profile = "tape"
+channels = ["telegram.tape"]
+skill_bundles = ["tape"]
+cron_jobs = ["tape-anchor"]

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TAPE — did they really call it?</title>
+<!--
+  THE VERIFICATION RUNS IN YOUR BROWSER. THAT IS THE WHOLE POINT.
+
+  No backend. When you check a call, your browser talks straight to a Solana RPC and
+  recomputes the hashes locally. No TAPE server is contacted and none can be. If we
+  served the verdict ourselves we would be back inside the trust set this thing exists
+  to escape, and a "verified" badge issued by the scorekeeper is just a logo.
+
+  Design note (Jiggy, 2026-07-28): the claim leads, in plain English. Hashes live behind
+  a disclosure triangle. The RPC picker is real but folded away, because most readers do
+  not care who serves the block and the ones who do will go looking. Hiding the machinery
+  is not hiding the truth: every number is one click away and the page still says FRAUD
+  about our own record.
+-->
+<style>
+  :root{
+    --bg:#0a0610; --panel:#150e20; --panel2:#1b1229; --line:#2c1d3f; --ink:#f2ecfa;
+    --dim:#a293ba; --violet:#b47cff; --violet2:#7a4bd6; --green:#3fe8ab; --red:#ff5f7e; --amber:#ffc95c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:
+      radial-gradient(1200px 500px at 50% -200px,#241238 0%,transparent 70%),var(--bg);
+    color:var(--ink);font:16px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+    padding:26px 16px 70px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:680px;margin:0 auto}
+
+  .brand{display:flex;align-items:baseline;gap:10px;margin-bottom:3px}
+  .brand h1{font-size:27px;margin:0;letter-spacing:-.5px}
+  .brand .slash{color:var(--violet)}
+  .ticker{overflow:hidden;white-space:nowrap;color:#4b3a63;font-size:11px;letter-spacing:.3em;
+    margin-bottom:24px;border-bottom:1px dashed #291b3a;padding-bottom:9px}
+
+  /* ---------- the claim, front and centre ---------- */
+  .claim{background:linear-gradient(160deg,var(--panel2),var(--panel));
+    border:1px solid var(--line);border-radius:18px;padding:24px 22px;margin-bottom:14px}
+  .who{font-size:13px;color:var(--dim);letter-spacing:.05em;margin-bottom:10px}
+  .who b{color:var(--violet);font-weight:700}
+  .said{font-size:25px;line-height:1.35;font-weight:700;letter-spacing:-.3px;margin:0 0 14px}
+  .said .side{color:var(--green)} .said .side.no{color:var(--red)}
+  .said .at{color:var(--dim);font-weight:400;font-size:19px}
+  .when{font-size:13px;color:var(--dim)}
+  .note-line{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);
+    font-size:13.5px;color:var(--dim);font-style:italic}
+
+  /* ---------- verdict ---------- */
+  .verdict{border-radius:18px;border:1px solid;margin-bottom:14px;overflow:hidden}
+  .vhead{display:flex;align-items:center;gap:13px;padding:19px 22px}
+  .vmark{font-size:27px;line-height:1}
+  .vtext h2{margin:0;font-size:21px;letter-spacing:.05em}
+  .vtext p{margin:3px 0 0;font-size:13.5px;color:var(--dim)}
+  .ok{background:#062219;border-color:var(--green)} .ok h2{color:var(--green)}
+  .bad{background:#280c15;border-color:var(--red)} .bad h2{color:var(--red)}
+  .meh{background:#291f0f;border-color:var(--amber)} .meh h2{color:var(--amber)}
+
+  details.more{border-top:1px solid rgba(255,255,255,.07)}
+  details.more summary{cursor:pointer;list-style:none;padding:12px 22px;font-size:13px;
+    color:var(--dim);display:flex;align-items:center;gap:9px;user-select:none}
+  details.more summary::-webkit-details-marker{display:none}
+  details.more summary::before{content:'';border-left:6px solid transparent;border-right:6px solid transparent;
+    border-top:7px solid var(--dim);transition:transform .18s}
+  details.more[open] summary::before{transform:rotate(-180deg)}
+  details.more summary:hover{color:var(--ink)}
+  .guts{padding:2px 22px 20px}
+  .kv{display:grid;grid-template-columns:118px 1fr;gap:7px 14px;font-size:12.5px}
+  .kv div:nth-child(odd){color:var(--dim)}
+  .mono{word-break:break-all}
+  .roots{font-size:12.5px;margin-bottom:12px}
+  .roots div{word-break:break-all;margin-bottom:5px}
+  .roots .lbl{color:var(--dim)}
+
+  /* ---------- input ---------- */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+  label{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  textarea,input{width:100%;background:#0c0713;color:var(--ink);border:1px solid var(--line);
+    border-radius:10px;padding:12px;font:12.5px/1.5 ui-monospace,monospace;resize:vertical}
+  textarea{min-height:120px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:13px}
+  button{background:var(--violet);color:#160726;border:0;border-radius:10px;padding:13px 24px;
+    font:700 15px ui-monospace,monospace;cursor:pointer}
+  button:disabled{opacity:.5;cursor:wait}
+  button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line);padding:9px 15px;font-size:13px}
+  button.ghost:hover{color:var(--ink);border-color:var(--violet2)}
+  .hint{font-size:12.5px;color:var(--dim)}
+  .srcbox{margin-top:12px;display:none}
+  .srcbox.show{display:block}
+  .why{font-size:13.5px;color:var(--dim);line-height:1.7}
+  .why b{color:var(--ink)}
+  .foot{text-align:center;font-size:12px;color:#5b4a73;margin-top:26px;letter-spacing:.05em}
+  a{color:var(--violet)}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand"><h1>TAPE</h1><span class="slash">// did they really call it?</span></div>
+  <div class="ticker">▸ NO EDITS ▸ NO DELETES ▸ NO QUIET EXITS ▸ THE TAPE DOESN'T LIE ▸ NO EDITS ▸ NO DELETES ▸ NO QUIET EXITS ▸</div>
+
+  <!-- the claim, in words -->
+  <div id="claim" class="claim hide">
+    <div class="who"><b id="caller"></b> <span id="lane"></span></div>
+    <p class="said" id="said"></p>
+    <div class="when" id="when"></div>
+    <div class="note-line hide" id="noteline"></div>
+  </div>
+
+  <!-- verdict -->
+  <div id="verdict" class="verdict hide">
+    <div class="vhead">
+      <div class="vmark" id="vmark"></div>
+      <div class="vtext"><h2 id="vtitle"></h2><p id="vsub"></p></div>
+    </div>
+    <details class="more" id="moreWrap">
+      <summary id="moreLabel">show me the receipts</summary>
+      <div class="guts" id="guts"></div>
+    </details>
+  </div>
+
+  <!-- input -->
+  <div class="card" id="inputCard">
+    <label for="receipt">Paste a receipt</label>
+    <textarea id="receipt" spellcheck="false" placeholder="drop the receipt JSON here and find out"></textarea>
+    <div class="row">
+      <button id="go">Check it</button>
+      <button class="ghost" id="srcToggle" title="choose which Solana node answers">⚙ source</button>
+      <span class="hint">checked on your device. we never see it.</span>
+    </div>
+    <div class="srcbox" id="srcbox">
+      <label for="rpc" style="margin-top:14px">Solana RPC</label>
+      <input id="rpc" value="https://solana-rpc.publicnode.com" spellcheck="false">
+      <div class="hint" style="margin-top:7px">Most people should leave this alone. It is here because
+        we should not get to choose the source of truth for our own scoreboard. Point it at any node you trust.</div>
+    </div>
+  </div>
+
+  <button class="ghost hide" id="again" style="margin-bottom:16px">check another call</button>
+
+  <div class="card why">
+    <b>What a green tick means here.</b> This exact call existed, word for word, before that
+    moment on Solana. Nobody has touched it since. Not the caller, not us.
+    <br><br>
+    <b>What it does not mean.</b> That they actually put money on it. That is a different claim
+    and we label it openly instead of quietly assuming it.
+    <br><br>
+    <b>Why this beats a green tick on some website.</b> The maths ran on your machine, against a
+    public blockchain, using code you can read (view source, it is all right there). And it will
+    say <b style="color:var(--red)">FRAUD</b> about our own record if the chain disagrees with it.
+    A checker that can only ever say yes is not a checker, it is a sticker.
+  </div>
+
+  <div class="foot">keep time, or be kept</div>
+</div>
+
+<script>
+/* ---------- primitives ---------- */
+const B58='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58MAP=new Map([...B58].map((c,i)=>[c,i]));
+function base58Decode(s){
+  const bytes=[0];
+  for(const ch of s){
+    const v=B58MAP.get(ch);
+    if(v===undefined) throw new Error('bad base58 character '+JSON.stringify(ch));
+    let carry=v;
+    for(let i=0;i<bytes.length;i++){carry+=bytes[i]*58;bytes[i]=carry&255;carry>>=8;}
+    while(carry>0){bytes.push(carry&255);carry>>=8;}
+  }
+  for(const ch of s){ if(ch!=='1') break; bytes.push(0); }
+  return new Uint8Array(bytes.reverse());
+}
+/* keys sorted, no whitespace, RAW NUMBERS REJECTED: float formatting is not portable, so a
+   bare number in the committed bytes would let two honest parties hash the same call
+   differently, and then the record is arguable. */
+function canon(v,path='$'){
+  if(v===null) return 'null';
+  const t=typeof v;
+  if(t==='number') throw new Error('raw number at '+path+', quantities must be decimal strings');
+  if(t==='boolean') return v?'true':'false';
+  if(t==='string') return JSON.stringify(v);
+  if(Array.isArray(v)) return '['+v.map((x,i)=>canon(x,path+'['+i+']')).join(',')+']';
+  if(t==='object') return '{'+Object.keys(v).sort().map(k=>{
+      if(v[k]===undefined) throw new Error('undefined value at '+path+'.'+k);
+      return JSON.stringify(k)+':'+canon(v[k],path+'.'+k);
+    }).join(',')+'}';
+  throw new Error('unsupported type '+t+' at '+path);
+}
+const enc=new TextEncoder();
+async function sha(...parts){
+  let n=0; parts.forEach(p=>n+=p.length);
+  const buf=new Uint8Array(n); let o=0;
+  for(const p of parts){buf.set(p,o);o+=p.length;}
+  return new Uint8Array(await crypto.subtle.digest('SHA-256',buf));
+}
+const hex=u8=>[...u8].map(b=>b.toString(16).padStart(2,'0')).join('');
+const unhex=h=>new Uint8Array(h.match(/.{2}/g).map(b=>parseInt(b,16)));
+/* 0x00 leaves, 0x01 nodes: stops an internal node being replayed in a leaf position */
+const leaf=b=>sha(new Uint8Array([0]),b);
+const node=(l,r)=>sha(new Uint8Array([1]),l,r);
+async function rootFromProof(bytes,proof){
+  let acc=await leaf(bytes);
+  for(const s of proof){
+    if(s.side!=='left'&&s.side!=='right') throw new Error('bad proof side');
+    if(!/^[0-9a-f]{64}$/.test(s.hash||'')) throw new Error('proof step needs a 64-hex hash');
+    const sib=unhex(s.hash);
+    acc = s.side==='left' ? await node(sib,acc) : await node(acc,sib);
+  }
+  return hex(acc);
+}
+const MEMO='MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
+async function fetchAnchor(rpc,sig){
+  const r=await fetch(rpc,{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',id:1,method:'getTransaction',
+      params:[sig,{commitment:'confirmed',maxSupportedTransactionVersion:0,encoding:'json'}]})});
+  if(!r.ok) throw new Error('the node answered HTTP '+r.status);
+  const j=await r.json();
+  if(j.error) throw new Error(j.error.message);
+  if(!j.result) return {found:false};
+  const tx=j.result, keys=tx.transaction?.message?.accountKeys||[], ixs=tx.transaction?.message?.instructions||[];
+  let memo=null;
+  /* read INSTRUCTION DATA, not validator logs: logs truncate on busy blocks and a truncated
+     log is indistinguishable from "no memo here" */
+  for(const ix of ixs){ if(keys[ix.programIdIndex]===MEMO){ memo=new TextDecoder().decode(base58Decode(ix.data)); break; } }
+  let parsed=null; try{parsed=memo?JSON.parse(memo):null}catch(e){parsed=null}
+  return {found:true,slot:tx.slot,blockTime:tx.blockTime,signer:keys[0]||null,parsed};
+}
+
+/* ---------- turn a call into a sentence ---------- */
+function humanMarket(m){
+  let g=/^github:([^/]+\/[^/]+)\/pull\/(\d+):merged_by:(.+)$/.exec(m||'');
+  if(g) return 'pull request #'+g[2]+' in '+g[1]+' gets merged by '+shortDate(g[3]);
+  let s=String(m||'').replace(/^[a-z0-9]+:/,'').replace(/_/g,' ');
+  s=s.replace(/\b(\d{4}-\d{2}-\d{2})\b/g,(d)=>shortDate(d));
+  return s;
+}
+function shortDate(d){
+  const t=Date.parse(d); if(isNaN(t)) return d;
+  return new Date(t).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+}
+function prettyWhen(iso){
+  const t=Date.parse(iso); if(isNaN(t)) return iso;
+  return new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',
+    hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+}
+const SIDEWORD={yes:'YES',no:'NO',long:'LONG',short:'SHORT'};
+
+/* ---------- the check ---------- */
+async function verify(receipt,rpc){
+  for(const f of ['entry','proof','anchor'])
+    if(receipt?.[f]===undefined) return {v:'UNKNOWN',notes:['this receipt has no "'+f+'" in it']};
+  if(!Array.isArray(receipt.proof)) return {v:'UNKNOWN',notes:['the proof should be a list']};
+  const sig=receipt.anchor?.signature;
+  if(!sig) return {v:'UNKNOWN',notes:['this receipt does not say which transaction anchored it']};
+  let bytes,computed,entryHash;
+  try{
+    bytes=enc.encode(canon(receipt.entry));
+    entryHash=hex(await sha(bytes));
+    computed=await rootFromProof(bytes,receipt.proof);
+  }catch(e){ return {v:'UNKNOWN',notes:['could not read this receipt: '+e.message]}; }
+  let a;
+  try{ a=await fetchAnchor(rpc,sig); }
+  catch(e){ return {v:'UNKNOWN',entryHash,computed,notes:['could not reach the chain: '+e.message]}; }
+  if(!a.found) return {v:'UNKNOWN',entryHash,computed,sig,
+    notes:['this node has never heard of that transaction. It might be pruned, or it might be invented. Those are different things and this page will not guess. Try another node.']};
+  if(!a.parsed||a.parsed.p!=='tape') return {v:'FRAUD',entryHash,computed,anchor:a,sig,
+    notes:['that transaction is real but it carries no TAPE anchor']};
+  if(computed!==a.parsed.root) return {v:'FRAUD',entryHash,computed,anchor:a,sig,onchain:a.parsed.root,
+    notes:['The chain disagrees with this receipt. Either the call was changed after it was locked in, or this proof belongs to a different call.']};
+  return {v:'VERIFIED',entryHash,computed,anchor:a,sig,leafCount:a.parsed.n,notes:[]};
+}
+
+/* ---------- ui ---------- */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const COPY={
+  VERIFIED:{mark:'✓',cls:'ok',title:'THEY CALLED IT',sub:'This happened, exactly like this, before anyone knew the answer.'},
+  FRAUD:{mark:'✕',cls:'bad',title:'SOMEONE TOUCHED IT',sub:'This does not match what was locked onto the chain.'},
+  UNKNOWN:{mark:'?',cls:'meh',title:"CAN'T TELL",sub:'Not an accusation. We simply could not complete the check.'}
+};
+
+$('srcToggle').onclick=()=>$('srcbox').classList.toggle('show');
+$('again').onclick=()=>{
+  $('claim').classList.add('hide'); $('verdict').classList.add('hide');
+  $('again').classList.add('hide'); $('inputCard').classList.remove('hide');
+  $('receipt').value=''; $('receipt').focus();
+};
+$('go').onclick=run;
+
+async function run(){
+  const btn=$('go'); btn.disabled=true; btn.textContent='checking…';
+  let receipt;
+  try{ receipt=JSON.parse($('receipt').value); }
+  catch(e){ paint(null,{v:'UNKNOWN',notes:['that is not valid JSON: '+e.message]}); reset(); return; }
+  showClaim(receipt.entry);
+  const res=await verify(receipt,$('rpc').value.trim());
+  paint(receipt,res);
+  reset();
+  function reset(){ btn.disabled=false; btn.textContent='Check it'; }
+}
+
+function showClaim(entry){
+  if(!entry) return;
+  $('caller').textContent=entry.caller||'someone';
+  $('lane').textContent='called it on the '+(entry.lane||'tape')+' tape';
+  const side=SIDEWORD[entry.side]||String(entry.side||'').toUpperCase();
+  const cls=(entry.side==='no'||entry.side==='short')?'side no':'side';
+  $('said').innerHTML='<span class="'+cls+'">'+esc(side)+'</span> <span class="at">·</span> '
+    +esc(humanMarket(entry.market))
+    +' <span class="at">@ '+esc(entry.entry_ref)+'</span>';
+  $('when').textContent='claimed '+prettyWhen(entry.ts_claimed);
+  if(entry.note){ $('noteline').textContent='“'+entry.note+'”'; $('noteline').classList.remove('hide'); }
+  else $('noteline').classList.add('hide');
+  $('claim').classList.remove('hide');
+  $('inputCard').classList.add('hide');
+  $('again').classList.remove('hide');
+}
+
+function paint(receipt,res){
+  const c=COPY[res.v], box=$('verdict');
+  box.className='verdict '+c.cls;
+  $('vmark').textContent=c.mark; $('vmark').style.color=
+    res.v==='VERIFIED'?'var(--green)':res.v==='FRAUD'?'var(--red)':'var(--amber)';
+  $('vtitle').textContent=c.title; $('vsub').textContent=c.sub;
+
+  let g='';
+  if(res.v==='VERIFIED'&&res.anchor){
+    $('moreLabel').textContent='show me the receipts';
+    g='<div class="kv">'
+      +'<div>locked in</div><div>'+(res.anchor.blockTime?prettyWhen(new Date(res.anchor.blockTime*1000).toISOString()):'unknown')+'</div>'
+      +'<div>solana slot</div><div>'+res.anchor.slot+'</div>'
+      +'<div>in a batch of</div><div>'+res.leafCount+' calls</div>'
+      +'<div>call fingerprint</div><div class="mono">'+esc(res.entryHash)+'</div>'
+      +'<div>batch fingerprint</div><div class="mono">'+esc(res.computed)+'</div>'
+      +'<div>anchored by</div><div class="mono">'+esc(res.anchor.signer||'?')+'</div>'
+      +'</div><div class="hint" style="margin-top:12px">Recomputed on your device and checked against the node you chose. '
+      +'<a href="https://solscan.io/tx/'+esc(res.sig||'')+'" target="_blank" rel="noopener">see it on Solscan</a></div>';
+  } else if(res.v==='FRAUD'){
+    $('moreLabel').textContent='show me exactly what does not match';
+    g='<div class="roots">'
+      +(res.onchain?'<div><span class="lbl">on the chain:</span> '+esc(res.onchain)+'</div>'
+        +'<div><span class="lbl">this receipt:</span> '+esc(res.computed)+'</div>':'')
+      +'</div><div class="hint">'+res.notes.map(esc).join('<br>')+'</div>';
+  } else {
+    $('moreLabel').textContent='what went wrong';
+    g='<div class="hint">'+res.notes.map(esc).join('<br>')
+      +'<br><br>An unreachable node or an unreadable receipt is an absence of evidence, not evidence of guilt. '
+      +'So this is amber, never red.</div>';
+  }
+  $('guts').innerHTML=g;
+  $('moreWrap').open = (res.v!=='VERIFIED');   // trouble opens itself; a clean pass stays tidy
+  box.classList.remove('hide');
+  box.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+/* Deep link: ?r=<base64url receipt>. base64url because standard base64 contains '+',
+   which URLSearchParams turns into a SPACE, so a plain-base64 link arrives corrupted.
+   Failures are SHOWN, not swallowed: a broken link used to look like an empty page. */
+function b64urlDecode(s){
+  s=String(s).replace(/-/g,'+').replace(/_/g,'/');
+  while(s.length%4) s+='=';
+  return atob(s);
+}
+(function(){
+  const p=new URLSearchParams(location.search).get('r');
+  if(!p) return;
+  try{
+    $('receipt').value=JSON.stringify(JSON.parse(b64urlDecode(p)),null,2);
+    run();
+  }catch(e){
+    paint(null,{v:'UNKNOWN',notes:['this shared link could not be read: '+e.message,
+      'Paste the receipt below instead.']});
+  }
+})();
+</script>
+</body>
+</html>

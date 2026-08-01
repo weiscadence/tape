@@ -1,0 +1,46 @@
+{
+  "_": "TAPE receipt. Verify with: node tape-verify.mjs <this-file> — no TAPE service required.",
+  "entry": {
+    "v": "1",
+    "type": "open",
+    "caller": "cadence-wave",
+    "lane": "prediction",
+    "market": "pyth:SOL:above:70@2026-08-07T00:00:00Z",
+    "side": "yes",
+    "size": "1",
+    "entry_ref": "0.72",
+    "ts_claimed": "2026-07-30T22:35:53.513Z",
+    "ref": null,
+    "nonce": "da137742ba196fee14cc49d4a3b06c7c",
+    "note": "First price market on the tape. SOL 74.74 at post time; calling it holds above 70 through Aug 7. Resolver added tonight: Pyth historical benchmark AT the deadline timestamp, so this settles identically for every reader and is unknowable until then.",
+    "signer": "2hsSKcSzE7KNhDRFMLHetWx3P6qyrVBJAXyMpHFK2Mcu",
+    "sig": "287fAZSxjSi9MaSibEAQ3Jgug4TSzcS3g9LjDWtrLiRbGuomtKmLgJ7y3sGmXktpjYr5qsPw4NgTDaFDjACek1bt"
+  },
+  "proof": [
+    {
+      "side": "left",
+      "hash": "d2a5616986804bdb1df4432987a686a20318e1a69707fa69118247a0c1afb823"
+    },
+    {
+      "side": "left",
+      "hash": "32bf8f1b631395f804bed2c59b580cf797a1ceb3353158ebf07f1c5a37ba8af0"
+    },
+    {
+      "side": "left",
+      "hash": "bc755e65914022d4fa7a1a529af72e29abadc5a82afa5df1ea190a0e22179458"
+    },
+    {
+      "side": "left",
+      "hash": "ba845c66f659b9e71c8fe3553ef2e8edae6bc9eceafa5b8823f14c53762a6fe6"
+    }
+  ],
+  "anchor": {
+    "signature": "3ATsMXFaPSnHiHRruZvEVDxQ6AfKTwXvWhp7oHmZiHuhaTMWPaX3Q2wzUD8rAg4gR3EnfvEXu4YeEVCzxeKkekRG",
+    "root": "f3cfbe89e1372bfab01690ef4879dfefdcf8343b867a17dd1682a19a1f335956",
+    "slot": 436241109,
+    "cluster": "mainnet",
+    "explorer": "https://solscan.io/tx/3ATsMXFaPSnHiHRruZvEVDxQ6AfKTwXvWhp7oHmZiHuhaTMWPaX3Q2wzUD8rAg4gR3EnfvEXu4YeEVCzxeKkekRG"
+  },
+  "entry_hash": "5b6c925f8296ed28161598104023b1cb168961d3fb0b5bdaf707d1c8edacb7a6",
+  "seq": 43
+}

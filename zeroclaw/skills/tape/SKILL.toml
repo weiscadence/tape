@@ -1,0 +1,41 @@
+[skill]
+name = "tape"
+description = "Record calls on TAPE, an append-only call record anchored to Solana."
+version = "0.1.0"
+author = "cadence-wave"
+tags = ["solana", "provenance"]
+prompts = [
+  "TAPE distinguishes 'posted' from 'anchored'. Never tell a user their call is provable until tape_anchor has run and tape_verify returns VERIFIED.",
+  "All quantities passed to tape_post must be decimal STRINGS, e.g. \"0.80\". Never pass a bare number.",
+]
+
+[[tools]]
+name = "tape_post"
+description = "Record a call on the tape. Quantities must be decimal strings. Does not anchor."
+kind = "shell"
+command = 'node __TAPE_ROOT__/bin/post.js --caller "{{caller}}" --lane "{{lane}}" --market "{{market}}" --side "{{side}}" --size "{{size}}" --entry_ref "{{entry_ref}}" --note "{{note}}"'
+args = { caller = "string", lane = "string", market = "string", side = "string", size = "string", entry_ref = "string", note = "string" }
+timeout_secs = 30
+
+[[tools]]
+name = "tape_anchor"
+description = "Commit all entries to a Merkle root and write it to Solana mainnet, unconditionally. Costs ~5000 lamports."
+kind = "shell"
+command = 'node __TAPE_ROOT__/bin/daemon.js --once'
+timeout_secs = 180
+
+[[tools]]
+name = "tape_receipt"
+description = "Export a self-contained receipt (entry + proof + anchor signature) for one entry, by seq or entry hash."
+kind = "shell"
+command = 'node __TAPE_ROOT__/bin/receipt.js "{{selector}}"'
+args = { selector = "string" }
+timeout_secs = 30
+
+[[tools]]
+name = "tape_verify"
+description = "Independently verify a receipt against Solana. Returns VERIFIED, FRAUD or UNKNOWN. Uses no TAPE code or service."
+kind = "shell"
+command = 'node __TAPE_ROOT__/verify/tape-verify.mjs "{{receipt_path}}"'
+args = { receipt_path = "string" }
+timeout_secs = 60

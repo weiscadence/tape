@@ -1,0 +1,27 @@
+{
+  "name": "tape",
+  "version": "1.0.0",
+  "private": false,
+  "description": "An undeletable call record. Post a position, it stays open and marks to market until you publicly close it. Merkle-committed and anchored to Solana, so the timestamp on every call is a slot the operator does not control.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "commonjs",
+  "main": "lib/entry.js",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:price": "node --test test/price.test.js test/price-fallback.test.js",
+    "api": "node bin/api.js",
+    "daemon": "node bin/daemon.js",
+    "anchor": "node bin/anchor-now.js",
+    "leaderboard": "node bin/leaderboard.js",
+    "verify": "node verify/tape-verify.mjs",
+    "doctor": "node bin/doctor.js"
+  },
+  "dependencies": {
+    "@solana/web3.js": "1.98.4",
+    "bs58": "4.0.1",
+    "tweetnacl": "1.0.3"
+  }
+}
