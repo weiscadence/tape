@@ -110,7 +110,13 @@ body{width:1280px;height:720px;background:#08080a;color:#d8d2c4;
   max-height:560px;overflow:hidden}
 .cmd{font-size:21px;color:#e8dcbe;margin-bottom:18px}
 .cmd::before{content:'$ ';color:#6a5f47}
-pre{font-size:19px;line-height:1.5;color:#a89e88;white-space:pre-wrap;word-break:break-all}
+/* word-break:break-all wrapped mid-WORD ("refused: t / he anchor key"), which read as
+   garbled text spilling out of the panel. overflow-wrap:anywhere wraps at spaces first and
+   only splits a token when it genuinely cannot fit — which is what the 64-char hashes need,
+   and nothing else does. min-width:0 keeps the pre from forcing the flex parent wider than
+   the card, which is what let the continuation lines escape the border. */
+pre{font-size:19px;line-height:1.5;color:#a89e88;white-space:pre-wrap;
+  word-break:normal;overflow-wrap:anywhere;min-width:0;max-width:100%}
 .ok{color:#9fd08a}.bad{color:#f08a5d}
 .caption{position:absolute;bottom:30px;left:64px;right:64px;font-size:20px;color:#8a7f68;
   text-align:center}
