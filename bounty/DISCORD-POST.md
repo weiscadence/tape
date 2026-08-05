@@ -15,8 +15,12 @@ Merkle root, and anchors that root to Solana mainnet. One rule: **post a positio
 stays open and marks to market until you publicly close it.** No delete, no edit, no quiet
 abandonment. A 90% win rate with one −$400k open bag ranks below 55% with clean books.
 
-**Live on mainnet, not a testnet demo.** Six anchors, real lamports. The call in the video
-is verified against slot `436241109`.
+**Live on mainnet, unattended, for over a week — not a demo built for the video.** More than
+**1,400 anchors across 7+ unbroken days**, all mainnet, real lamports, mean interval 7.4
+minutes. Still anchoring right now; `node bin/anchor-stats.js` prints the live figure and
+also prints our three outages (61, 87 and 27 minutes) rather than smoothing them, because the
+87-minute one is the daemon dying silently with nothing noticing — which is why it now has a
+health canary. The call in the video is verified against slot `436241109`.
 
 **What I'd actually like you to look at — the verifier can convict us.**
 It shares no code with the thing that writes the records and it talks to Solana, not to our

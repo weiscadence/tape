@@ -5,15 +5,28 @@ calls on a real channel, commits each one to a Merkle root, and writes that root
 so the timestamp on every call is a slot the operator does not control. The tape doesn't lie
 because the tape's clock isn't ours.
 
-**Live on Solana mainnet right now.** Six anchors, real lamports, independently checkable:
+**Live on Solana mainnet, unattended, for over a week.** Not a demo run for the video:
+**more than 1,400 anchors across more than 7 unbroken days**, every one on mainnet with real
+lamports, mean interval 7.4 minutes. It was still anchoring while this sentence was written
+and it is still anchoring now. Re-derive the live figures — the count moves every few
+minutes, so any number typed here is stale shortly after it is typed:
 
-| slot | entries | tx |
-|---|---|---|
-| 435812245 | 2 | `3YZ6QiwrNVfptbhwuPGG4wME…` |
-| 435813695 | 7 | `2PXBdMmzhTgmb6XxwC1F1BAz…` |
-| 435816043 | 8 | `5QUasfdfJkCKQ7GDariTvYDL…` |
-| 435824647 | 8 | `5KsVoPvcDjAh6QKR6aeUkPz1…` |
-| 435825732 | 9 | `5UTqeQaX2DwRT6CYXg1MUFtp…` |
+```
+node bin/anchor-stats.js
+```
+
+|  | |
+|---|---|
+| first anchor | `2026-07-28T20:36:44Z`, slot `435812245` |
+| latest at time of writing | `2026-08-05T01:54:36Z`, slot `437289045` |
+| anchors | 1,405 — all mainnet |
+| gaps over 25 min | **3**: 61 min, 87 min, 27 min |
+
+The gaps are printed by that command rather than smoothed away, because they are the part
+that argues against us. The 87-minute one on 2026-07-30 is the anchoring daemon dying
+silently with nothing noticing — which is why `scripts/tape-health.js` exists now. A
+liveness claim from a system with no way to detect its own death is worth nothing, and we
+would rather show the hole and the fix than a clean-looking week.
 
 ---
 
