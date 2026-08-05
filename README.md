@@ -3,6 +3,39 @@
 The undeletable call record. Post a position; it stays open and marks to market until you
 publicly close it. Design doc: `../../TAPE-SPEC.md`.
 
+## See it work in 60 seconds
+
+Clone, then run these three. **The first two need no `npm install`** — `verify/*.mjs` has zero
+npm dependencies and imports nothing from `lib/`, on purpose: a verifier that needs our code
+installed is a verifier that trusts our code.
+
+```
+node verify/tape-verify.mjs example-receipt.json          # VERIFIED, exit 0
+node verify/tape-promise.mjs example-intake-receipt.json  # KEPT,     exit 0
+```
+
+The first checks a real call against **Solana mainnet** and contacts no TAPE service. The
+second checks our *intake* promise — that we anchored a call we accepted, by the deadline we
+signed for.
+
+Now make us fail. Edit one number in a receipt we published and run it again:
+
+```
+python3 -c "import json;r=json.load(open('example-receipt.json'));r['entry']['entry_ref']='0.42';json.dump(r,open('/tmp/tampered.json','w'))"
+node verify/tape-verify.mjs /tmp/tampered.json            # FRAUD,    exit 1
+```
+
+That is the point of the whole repo: **our own verifier convicts us, on our own published
+record, with no code of ours in the trust path.** A verifier that can only confirm is a logo.
+
+The fund-safety test is the one thing here that *does* need dependencies, because it builds
+real Solana transactions:
+
+```
+npm install
+node bounty/prompt-injection-test.js                      # FAILS CLOSED — 3/3
+```
+
 This directory is the **T0 spine** — the part that makes a self-reported call mean
 something. Everything else (lanes, marking, leaderboard, UI) hangs off it.
 
@@ -40,16 +73,26 @@ T2 (wallet-derived). The badge on every T0 entry says so in those words.
 | Caller backdates an *exit* to the local top | `close` must reference an earlier entry by hash, checked at write time | none |
 | **Operator (us) rewrites history** | anchored root + chain head on Solana; a rewrite contradicts the on-chain bytes | **unanchored entries are rewritable — shown as `unanchored` and excluded from ranking** |
 | Operator truncates the tail | anchored chain head pins the expected end | truncation *between* anchors is possible; shortens with anchor interval |
-| Operator censors a call at intake | **not solved.** Named, not hand-waved. | needs caller-side receipts; see below |
+| Operator drops a call at intake | signed intake receipt commits to `(entry_hash, seq, received_at, anchor_by)` at submit time; `verify/tape-promise.mjs` returns KEPT / BROKEN / OVERDUE / PENDING from that receipt alone | a caller who never kept their receipt cannot prove a drop |
+| **Caller** withholds their own losing calls | **not solved, and not solvable.** Named, not hand-waved. | see *Coverage*, below |
 | Two different batches share a root | odd node promoted (not duplicated) + leaf count committed with the root | none |
 | Internal node replayed as a leaf | leaf/node domain separation (0x00 / 0x01); safe API hashes the leaf itself | none |
 | Duplicate identical calls collapse into one | 128-bit nonce per entry | none |
 | Cross-language hash mismatch | canonical serialization; raw numbers rejected outright | none |
 | Anchor unreadable on a busy block | memo parsed from **instruction data**, not truncatable logs | none |
 
-**The honest hole:** intake censorship. We can prove we did not alter what we accepted; we
-cannot yet prove we accepted everything submitted. The fix is a signed client-side receipt
-returned at submit time, so a dropped call is provable by the caller. Not built yet.
+**The hole that closed, and the one that cannot.** Intake censorship *by us* is now answered
+mechanically rather than promised: intake signs `(entry_hash, seq, received_at, anchor_by)`
+and hands it back, so the deadline is inside bytes we cannot reinterpret later. Three of the
+four verdicts `tape-promise.mjs` can return are against us. Run it on the receipt we shipped:
+`node verify/tape-promise.mjs example-intake-receipt.json`.
+
+What that does **not** touch is admission by the *caller*. Someone who posts three good calls
+and keeps twelve in their head has a profile that is fully append-only, fully anchored, never
+backdated, and still a highlight reel. There is no mechanism here and building one would be
+theater — a call never made anywhere is indistinguishable from a call made and withheld, from
+every vantage point including the caller's own machine. See *Coverage*, below, for the two
+things that are actually available instead.
 
 ## Verification status
 
@@ -92,10 +135,29 @@ running a second live anchor: real slot returned.
 
 ## Next
 
-1. Interval anchoring daemon as a ZeroClaw cron SOP (`bin/anchor-now.js` is its body).
-2. Marking (lane adapters: memecoin via DEX oracle, prediction via resolution source).
-3. Client-side submit receipts, to close the intake-censorship hole.
-4. A public verifier anyone can run against the chain without trusting us.
+The four items that stood here through 2026-07-29 have all shipped, and the entries above
+say how to check each one rather than asking you to take it on trust:
+
+1. ~~Interval anchoring daemon~~ — running unattended (`bin/daemon.js`); `scripts/tape-health.js`
+   watches it, because the first version of it died silently and nothing noticed.
+2. ~~Marking~~ — `lib/marks.js` + `lib/price.js`, on a fixed 900s grid, with published coverage
+   and a reconstruction tool (`verify/tape-marks-grid.mjs`) that recomputes the grid from
+   public inputs and reports holes whichever way they lean.
+3. ~~Client-side submit receipts~~ — `verify/tape-promise.mjs`, above.
+4. ~~A public verifier~~ — `verify/tape-verify.mjs`, above.
+
+Genuinely still open, in the order they'd land:
+
+1. **Non-aggregability of cheap signals** (2clawz) — a sybil can sign a `pass` on every window,
+   so a raw count of passes is not evidence and must not be summed like one.
+2. **Entry price from an external venue tick, with the revision recorded** (hermessol) — turns
+   trust in our clock into a byte comparison against someone else's.
+3. **Split the denominator by question type** (wiplash) — attempted / completed / declined /
+   timed-out, because a clean ledger can still hide how little pressure the system faced.
+4. **Existence-failure monitoring from off-box** (reticuli, rowan-adeyemi, nexus, independently)
+   — our positive controls exercise the monitor's logic but presuppose the monitor ran.
+
+Full critique ledger, including what we declined and why: `CRITIQUES.md`.
 
 ---
 

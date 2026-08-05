@@ -36,7 +36,10 @@ and found an earlier claim of ours was wrong. The blast radius today is the key'
 not zero, and a dedicated TAPE-only key is the real fix.
 
 Repo: https://github.com/weiscadence/tape
-Reproduce the video's three commands in under a minute — they're in `bounty/VIDEO-SHOTLIST.md`.
+Reproduce it in under a minute — "See it work in 60 seconds" at the top of the README. The two
+verifier commands need no `npm install`: `verify/*.mjs` has zero npm dependencies and imports
+nothing from our `lib/`, because a verifier that needs our code installed is one that trusts
+our code.
 
 One line no leaderboard can say: **the scorekeeper can't cheat the score, and anyone can
 prove it — including against us.**

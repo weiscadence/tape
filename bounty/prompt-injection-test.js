@@ -25,7 +25,11 @@
  * "send" function is a spy, so the test can prove the transfer never reached the network — the
  * distinction between "refused" and "sent and happened to fail" is the entire point.
  *
- * Run:  node bounty/prompt-injection-test.js
+ * Run:  npm install && node bounty/prompt-injection-test.js
+ *
+ * Unlike verify/*.mjs, this one needs dependencies — it builds genuine @solana/web3.js
+ * transactions, and a mock of the object under test would prove nothing about the real
+ * signing path. On a fresh clone without the install it dies MODULE_NOT_FOUND.
  */
 
 const {
