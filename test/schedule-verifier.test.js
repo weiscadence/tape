@@ -197,6 +197,31 @@ t('a settlement row for a question that is not on the tape is caught', async () 
   await expectMismatch(fx, /never published/);
 });
 
+// The pair below exists because these two rows look identical to the orphan check -- both
+// carry no epoch -- and only one of them is a problem. Shipping the skip without the
+// negative control above would have traded 216 false accusations for a real blind spot.
+t('a sweep_report is set aside, not accused of settling a phantom question', async () => {
+  // Live regression: sweep_report carries neither epoch nor question_hash by design, so it
+  // fell into the orphan bucket and printed "settles question undefined… which is not on
+  // the tape". 216 of them turned a clean record into MISMATCH -- a verifier whose
+  // accusations are noise cannot convict anyone, including us.
+  const fx = clone();
+  const src = rowOf(fx, 'question');
+  fx.entries.push({
+    ...src,
+    seq: fx.entries.length + 1,
+    // p:'tape-window' is what fetchWindowRows filters on — without it the row is dropped
+    // before the orphan check ever sees it, and the test would pass for the wrong reason.
+    entry: {
+      p: 'tape-window', type: 'sweep_report',
+      swept_at: 1785400000, questions_seen: 0, expired_written: 0, open_now: 0,
+    },
+  });
+  const r = await verdictFor(fx);
+  assert.doesNotMatch(r.out, /sweep_report row at seq/, `sweep_report accused as an orphan:\n${r.out}`);
+  assert.match(r.out, /sweep_report row\(s\) set aside/, `set-aside rows must be REPORTED, not silently dropped:\n${r.out}`);
+});
+
 section('-- UNKNOWN is not VERIFIED');
 
 t('a truncated tape is UNKNOWN, not a pass', async () => {

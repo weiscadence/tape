@@ -624,9 +624,27 @@ async function main() {
   // by the epoch of the question they settle rather than by a field they do not have.
   const epochOfQuestion = new Map();
   for (const r of rows) if (r.entry.type === 'question') epochOfQuestion.set(r.entry_hash, r.entry.epoch);
+  // sweep_report is board TESTIMONY, not a settlement: it records that the sweep looked,
+  // including on the runs that found nothing. It deliberately carries neither an epoch nor
+  // a question_hash, because it is about an instant in time rather than about one round or
+  // one question. Without this skip it landed in `orphans` and was reported as "settles
+  // question undefined… which is not on the tape" -- 216 fabricated findings against a
+  // clean record, turning the whole run into MISMATCH.
+  //
+  // That is the exact failure the spec names in 8c: a row family only one of the two
+  // implementations recognises produces a MISMATCH that means nothing, which is worse than
+  // no verifier at all. A verifier whose accusations are noise cannot convict anyone,
+  // including us -- and being able to convict us is the entire claim.
+  //
+  // Narrow on purpose. Only this type is skipped; a genuinely orphaned answer / pass /
+  // no_answer still lands in `orphans` and is still a problem, which the negative control
+  // in test/schedule-verifier.test.js pins.
+  const TESTIMONY = new Set(['sweep_report']);
   const byEpoch = new Map();
   const orphans = [];
+  let testimony = 0;
   for (const r of rows) {
+    if (TESTIMONY.has(r.entry.type)) { testimony += 1; continue; }
     const epoch = r.entry.epoch ?? epochOfQuestion.get(r.entry.question_hash);
     if (epoch === undefined) { orphans.push(r); continue; }
     if (!byEpoch.has(epoch)) byEpoch.set(epoch, []);
@@ -635,6 +653,13 @@ async function main() {
 
   const problems = [];
   const notes = [];
+  // Say what was set aside. A verifier that silently drops a row family teaches the reader
+  // that its silence covers everything it saw, which is the same lie as an untested zero.
+  if (testimony) {
+    notes.push(`${testimony} sweep_report row(s) set aside: board testimony that the sweep ran, `
+      + 'belonging to no epoch and settling no question by design. Their own coverage check is '
+      + 'sweepCoverage() — a missing sweep is a dated hole there, not an orphan here.');
+  }
   for (const o of orphans) {
     problems.push(`a ${o.entry.type} row at seq ${o.seq} settles question ${String(o.entry.question_hash).slice(0, 12)}… `
       + 'which is not on the tape — a response to a question that was never published');
