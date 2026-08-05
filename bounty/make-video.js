@@ -87,8 +87,12 @@ const SCENES = [
   { kind: 'card', big: 'The defence never depends on<br>the model refusing.',
     sub: 'The key physically cannot express a transfer. Not a policy &mdash; enforced in code, in lib/signing-policy.js, before the signer is ever reached.', sec: 11 },
 
-  { kind: 'card', big: 'Live on Solana mainnet.',
-    sub: 'Six anchors, real lamports, independently checkable. Slot 435812245 · 435813695 · 435816043 · 435824647 · 435825732 &mdash; and the one verified above, 436241109.', sec: 9 },
+  // Was "Six anchors" — true on 2026-07-30 and never updated while the daemon kept
+  // running. Understating a week of unattended uptime as a handful of transactions gave
+  // away the one thing separating this from a weekend demo. Lower bounds, not a snapshot,
+  // so the frame cannot go stale again between rendering and judging.
+  { kind: 'card', big: 'Live on mainnet for over a week.<br>Unattended.',
+    sub: 'More than 1,400 anchors across 7+ unbroken days, real lamports, mean interval 7.4 minutes &mdash; still anchoring right now. It also reports our three outages (61, 87 and 27 min) rather than smoothing them: <span class="mono">node bin/anchor-stats.js</span>.', sec: 10 },
 
   { kind: 'title', big: 'The scorekeeper can&rsquo;t cheat the score.',
     sub: 'And anyone can prove it &mdash; including against us.',
@@ -105,6 +109,9 @@ body{width:1280px;height:720px;background:#08080a;color:#d8d2c4;
 .big{font-size:44px;line-height:1.34;color:#f0e8d4;font-weight:normal}
 .sub{font-size:22px;line-height:1.7;color:#9a8f78;margin-top:26px;max-width:1080px}
 .foot{position:absolute;bottom:34px;left:64px;font-size:17px;color:#5d5442;letter-spacing:.08em}
+/* The whole frame is already monospace, so .mono is about making a runnable command read
+   as one rather than as prose — lifted out of the subtitle grey, not restyled. */
+.mono{color:#e8dcbe;white-space:nowrap}
 .title .big{font-size:80px;letter-spacing:.05em}
 .term{background:#0c0c0f;border:1px solid #23201a;border-radius:11px;padding:26px 30px;
   max-height:560px;overflow:hidden}
