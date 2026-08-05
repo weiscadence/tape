@@ -52,7 +52,7 @@ prove it — including against us.**
 
 ## Before posting, check
 
-- [ ] Video attached (`bounty/tape-demo.mp4`, 2:05, under the 3:00 limit)
+- [ ] Video attached (`bounty/tape-demo.mp4`, 1:51, under the 3:00 limit)
 - [ ] Repo is public and the link resolves in an incognito window
 - [ ] Posted in `#solana-bounty` (the bounty listing requires the showcase post)
 - [ ] Superteam listing submission filed: `earn.superteam.fun/listing/zeroclaw`
