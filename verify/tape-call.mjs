@@ -204,10 +204,28 @@ function checkReceipt(){
     ? { p: r.p, v: r.v, entry_hash: r.entry_hash, seq: r.seq, received_at: r.received_at }
     : { ...r, receipt_sig: null };
   const msg = Buffer.from('tape:v1:intake:' + canon(signedObject), 'utf8');
+  /**
+   * Unknown must not route into "forged". A shape this checker doesn't recognize (bad
+   * base58, a public key or signature of the wrong length, a field this version doesn't
+   * know how to canonicalize) threw inside edVerify's setup, and that exception was being
+   * folded into the same `ok=false` as an actual signature mismatch — both printed "BAD
+   * RECEIPT, either it was altered, or it was never signed by the key it names." An
+   * unrecognized shape is not evidence of tampering; it's evidence the checker is behind.
+   * So a decode/verify-setup failure gets its own outcome instead of a fraud accusation.
+   */
   let ok = false;
+  let cannotDetermine = null;
   try {
     ok = edVerify(null, msg, pubFromRaw(b58decode(r.receipt_by)), b58decode(r.receipt_sig));
-  } catch { ok = false; }
+  } catch (e) { cannotDetermine = e.message; }
+  if (cannotDetermine){
+    console.log('CANNOT DETERMINE. This checker could not evaluate the receipt, so this is');
+    console.log('not an accusation — it never reached a signature comparison.');
+    console.log(`  ${cannotDetermine}`);
+    console.log(`(receipt version ${JSON.stringify(r.v)} — if this file is older than the`);
+    console.log(' receipt, re-download it: curl -sO https://tape.drainfun.xyz/tape-call.mjs)');
+    process.exit(2);
+  }
   if (!ok){
     console.log('BAD RECEIPT. The signature does not verify over these bytes.');
     console.log('Either it was altered, or it was never signed by the key it names.');
