@@ -19,3 +19,6 @@ data/
 *wallet*.json
 *keypair*.json
 .config/
+
+# Video build intermediates (scenes, stills, captured command output).
+bounty/.video/
