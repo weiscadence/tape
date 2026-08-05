@@ -101,6 +101,28 @@ t('CONTROL: one altered character is caught', () => {
   assert.match(r.out, /BAD RECEIPT/);
 });
 
+t('an undecodable receipt_by is CANNOT DETERMINE, not an accusation', () => {
+  // A shape this checker doesn't recognize (garbage base58 in receipt_by) used to throw
+  // inside edVerify's setup and get folded into the same ok=false as a real forgery, so
+  // this printed "BAD RECEIPT... never signed by the key it names" — a fraud accusation
+  // for a checker error. It must now be a distinct, non-accusatory outcome.
+  const rec = intakeReceipt('c'.repeat(64), 20);
+  rec.receipt_by = '0OIl';                           // '0','O','I','l' are not valid base58
+  const r = run(['check-receipt', writeReceipt(rec, 'undecodable-by.json')]);
+  assert.strictEqual(r.code, 2);
+  assert.match(r.out, /CANNOT DETERMINE/);
+  assert.doesNotMatch(r.out, /BAD RECEIPT/);
+});
+
+t('an undecodable receipt_sig is CANNOT DETERMINE, not an accusation', () => {
+  const rec = intakeReceipt('c'.repeat(64), 21);
+  rec.receipt_sig = '0OIl';
+  const r = run(['check-receipt', writeReceipt(rec, 'undecodable-sig.json')]);
+  assert.strictEqual(r.code, 2);
+  assert.match(r.out, /CANNOT DETERMINE/);
+  assert.doesNotMatch(r.out, /BAD RECEIPT/);
+});
+
 t('CONTROL: a receipt signed by a DIFFERENT key is caught', () => {
   const other = crypto.generateKeyPairSync('ed25519');
   const otherKey = Buffer.concat([

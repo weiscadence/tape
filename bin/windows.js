@@ -352,13 +352,24 @@ function cmdSweep(nowUnix) {
   // would reproduce the exact bug this row exists to remove: the record would still be
   // violation-triggered, and a quiet hour would still be indistinguishable from a sweep
   // that never happened. The row is evidence the sweep LOOKED, not evidence it found.
-  appendSigned(W.buildWindowRow({
-    type: 'sweep_report',
-    swept_at: nowUnix,
-    questions_seen: seen,
-    expired_written: n,
-    open_now: openNow,
-  }));
+  // swept_at has one-second resolution, so two sweeps inside the same second over unchanged
+  // state build a byte-identical row and the chain's replay refusal rejects the second one.
+  // That refusal is right and stays: it is what stops a signed row being lifted and reposted.
+  // But it is not a sweep failure — the evidence row for this second is already on the chain —
+  // and letting it throw took the whole driver down with rc=1 before it did its phase work.
+  // Narrow on purpose: only this exact duplicate, only for sweep_report, and it says so.
+  try {
+    appendSigned(W.buildWindowRow({
+      type: 'sweep_report',
+      swept_at: nowUnix,
+      questions_seen: seen,
+      expired_written: n,
+      open_now: openNow,
+    }));
+  } catch (err) {
+    if (!/is already at seq/.test(err.message)) throw err;
+    console.log(`  sweep_report for ${nowUnix} already on chain — same second, unchanged state`);
+  }
   console.log(n ? `${n} window(s) expired unanswered` : 'no expired windows');
   console.log(`sweep_report written: ${seen} question(s) seen, ${n} written, ${openNow} still open`);
   return n;

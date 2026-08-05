@@ -65,11 +65,19 @@ function main(argv) {
 
   const rows = new Chain(CHAIN).read();
   const committed = rows.filter((r) => W.isWindowRow(r.entry) && r.entry.type === 'schedule_commit');
-  // The active round is the newest committed one. Once it is finished or provably empty
-  // the driver opens its successor, so the door reopens on its own rather than waiting
-  // for me to notice a round ended.
-  const active = committed.length ? committed[committed.length - 1].entry.epoch : isoWeek();
+  // A retracted epoch is not a round. schedule_void exists precisely so a bad commitment can
+  // be withdrawn by appending rather than deleting, and a driver that ignores it adopts the
+  // retracted round as current — which is how BOGUS-EPOCH-XX became "active" for 46 hours
+  // and froze 2026-W34 with two callers already enrolled.
+  const voided = new Set(rows.filter((r) => W.isWindowRow(r.entry)
+    && r.entry.type === 'schedule_void').map((r) => r.entry.epoch));
+  const live = committed.filter((r) => !voided.has(r.entry.epoch));
+  // The active round is the newest committed one still standing. Once it is finished or
+  // provably empty the driver opens its successor, so the door reopens on its own rather
+  // than waiting for me to notice a round ended.
+  const active = live.length ? live[live.length - 1].entry.epoch : isoWeek();
   const epoch = flag('epoch', active);
+  const usedLabels = new Set(committed.map((r) => r.entry.epoch)); // incl. voided: never reuse
 
   const of = (type) => rows.filter((r) => W.isWindowRow(r.entry)
     && r.entry.type === type && r.entry.epoch === epoch);
@@ -104,7 +112,13 @@ function main(argv) {
   const advance = (why) => {
     console.log(`${epoch}: ${why}`);
     if (epoch !== active) { console.log('  (--epoch given; not opening a successor)'); return 0; }
-    run(['commit', nextEpoch(epoch), '--windows', windows, '--open-hours', openHours]);
+    // windows.js refuses to reissue a commitment — reusing a label would let the board pick
+    // a second seed for the same round. Walking forward to a free label keeps that refusal
+    // as the invariant it is instead of a crash the driver walks into every hour.
+    let next = nextEpoch(epoch);
+    for (let i = 0; usedLabels.has(next) && i < 106; i += 1) next = nextEpoch(next);
+    if (usedLabels.has(next)) { console.log('  no free epoch label — refusing to reuse one'); return 1; }
+    run(['commit', next, '--windows', windows, '--open-hours', openHours]);
     return 0;
   };
 
