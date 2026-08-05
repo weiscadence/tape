@@ -14,6 +14,17 @@
  * scripts/tape-health.js was built to catch afterwards.
  *
  * Run: node bin/anchor-stats.js
+ *      node bin/anchor-stats.js --assert    (stable output, for the claim ledger)
+ *
+ * --assert exists because the claim ledger compares a command's output byte-for-byte
+ * against what it returned when the claim was recorded, and this command's normal output
+ * changes every ~7 minutes. Recording the snapshot would have produced a permanent DRIFT
+ * alarm that means nothing -- and an instrument that always alarms is one nobody reads,
+ * which is worse than not having it. So --assert re-derives the LOWER BOUNDS we actually
+ * published ("more than 1,400 anchors, more than 7 unbroken days, all mainnet") and prints
+ * a stable line while they hold. It goes to HOLDS as the record grows and only changes if
+ * a published claim stops being true -- e.g. anchors were deleted, or the mainnet-only
+ * claim broke. That is the thing worth alarming on.
  */
 const fs = require('fs');
 const path = require('path');
@@ -28,6 +39,24 @@ const gaps = [];
 for (let i = 1; i < a.length; i += 1) {
   const mins = (a[i].blockTime - a[i - 1].blockTime) / 60;
   if (mins > 25) gaps.push({ after: new Date(a[i - 1].blockTime * 1000).toISOString(), mins: Math.round(mins) });
+}
+
+// The published lower bounds, in one place. Monotone: a growing record keeps satisfying
+// them, so this line is stable; it moves only if the claim genuinely stopped being true.
+const BOUND_ANCHORS = 1400;
+const BOUND_DAYS = 7;
+if (process.argv.includes('--assert')) {
+  const offMainnet = a.filter((x) => !/main/i.test(x.cluster || '')).length;
+  const fail = [];
+  if (a.length < BOUND_ANCHORS) fail.push(`anchors ${a.length} < ${BOUND_ANCHORS}`);
+  if (hours / 24 < BOUND_DAYS) fail.push(`span ${(hours / 24).toFixed(2)}d < ${BOUND_DAYS}d`);
+  if (offMainnet) fail.push(`${offMainnet} anchor(s) not on mainnet`);
+  if (fail.length) {
+    console.log(`BROKEN: ${fail.join('; ')}`);
+    process.exit(1);
+  }
+  console.log(`HOLDS: >${BOUND_ANCHORS} anchors, >${BOUND_DAYS} unbroken days, all mainnet`);
+  process.exit(0);
 }
 
 console.log(`anchors            ${a.length}`);
