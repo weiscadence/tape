@@ -73,17 +73,26 @@ const VOID_MARK = 'VOID FOR RANKING';
  * the preference — they are rate-limited, but a rate-limited anchor beats no anchor.
  */
 function rpcCandidates() {
-  const urls = [];
-  try {
-    const k = JSON.parse(fs.readFileSync(path.join(SECURE, 'helius.json'), 'utf8'));
-    const key = k.api_key || k.key || k.apiKey || Object.values(k).find((v) => typeof v === 'string' && v.length > 20);
-    if (key) urls.push(`https://mainnet.helius-rpc.com/?api-key=${key}`);
-  } catch { /* no key file is survivable — the public endpoints below still work */ }
   // Order matters and is empirical: publicnode answers reads fine but did NOT land anchor
   // transactions (every send died "block height exceeded" even after the CU fix, i.e. the
   // tx was valid and simply never forwarded to a leader). Reads working is not evidence
   // that writes work — probe reads to pick an endpoint, but order by observed SEND success.
-  urls.push('https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com');
+  const urls = ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com'];
+
+  // Helius is LAST, not first (2026-08-06). It used to lead this list, which quietly made
+  // TAPE's liveness a function of an unrelated lane's spending: the same free-tier key is
+  // shared with the wallet-tracking fleet (insider-daemon alone re-scans 150 wallets every
+  // 30 min), that fleet burns the whole monthly credit allowance in ~3 days, and then the
+  // anchor daemon — which needs about four cheap calls a minute — starves behind it. Two
+  // keys died that way in three days. TAPE does not need a paid provider at all: getBalance,
+  // getLatestBlockhash and sendTransaction are all served by the keyless endpoints above,
+  // so a metered key belongs at the BACK of the list as a bonus, never at the front as a
+  // dependency. Keeping it listed still lets a healthy key get used when one exists.
+  try {
+    const k = JSON.parse(fs.readFileSync(path.join(SECURE, 'helius.json'), 'utf8'));
+    const key = k.api_key || k.key || k.apiKey || Object.values(k).find((v) => typeof v === 'string' && v.length > 20);
+    if (key) urls.push(`https://mainnet.helius-rpc.com/?api-key=${key}`);
+  } catch { /* no key file is survivable — the public endpoints above still work */ }
   return urls;
 }
 

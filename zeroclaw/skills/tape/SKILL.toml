@@ -7,6 +7,8 @@ tags = ["solana", "provenance"]
 prompts = [
   "TAPE distinguishes 'posted' from 'anchored'. Never tell a user their call is provable until tape_anchor has run and tape_verify returns VERIFIED.",
   "All quantities passed to tape_post must be decimal STRINGS, e.g. \"0.80\". Never pass a bare number.",
+  "tape_post argument mapping is FIXED, because the record is append-only and a malformed entry cannot be edited out. `market` is the whole venue-qualified id, venue prefix included: \"polymarket:0x5dc212b7...\", \"dexscreener:So111...\". `entry_ref` is the price ALONE as a decimal string: \"0.5945\". Never put the market id, an @, or any venue text in `entry_ref`, and never reduce `market` to just the venue name. If the user gives a market and a price in one sentence, split them on that boundary.",
+  "If any of caller, lane, market, side, size or entry_ref is missing or ambiguous, ASK ONE SHORT QUESTION instead of guessing. A wrong entry is permanent; an extra question costs a message.",
 ]
 
 [[tools]]

@@ -79,7 +79,33 @@ async function tryBinding(opts) {
   }
 }
 
+// The record is append-only, so a field written wrong is written forever. When the caller
+// is a language model filling arguments from a sentence, "close enough" is the normal
+// failure — it hands over "prediction lane" or "NO @0.59" and nothing downstream objects.
+// These two fields are closed sets, so refuse rather than record: a failed post costs one
+// message, a malformed entry costs a permanent row that every later reader has to explain.
+const LANES = ['memecoin', 'prediction', 'perp', 'lp', 'other'];
+const SIDES = ['long', 'short', 'yes', 'no'];
+
+function checkEnums(opts) {
+  const lane = String(opts.lane ?? '');
+  const side = String(opts.side ?? '').toLowerCase();
+  if (!LANES.includes(lane)) {
+    throw new Error(`refusing to post: lane "${lane}" is not one of ${LANES.join('|')}`);
+  }
+  if (!SIDES.includes(side)) {
+    throw new Error(`refusing to post: side "${opts.side}" is not one of ${SIDES.join('|')}`);
+  }
+  // entry_ref is the price alone. A model that folds the market id into it ("0x5dc…@0.59")
+  // produces a row whose price cannot be parsed by anything that marks to market.
+  const ref = String(opts.entry_ref ?? '');
+  if (!/^-?\d+(\.\d+)?$/.test(ref)) {
+    throw new Error(`refusing to post: entry_ref "${ref}" is not a bare decimal string (price only, no market id)`);
+  }
+}
+
 async function post(opts) {
+  checkEnums(opts);
   const { beacon, why } = await tryBinding(opts);
   if (!beacon) console.error(`NOT-BEFORE UNAVAILABLE (${why}) — posting one-sided, anchor-only.`);
 
@@ -88,7 +114,10 @@ async function post(opts) {
     caller: opts.caller,
     lane: opts.lane,
     market: opts.market,
-    side: opts.side,
+    // Every row on the tape so far is lowercase ("yes"/"no"/"long"). A model that types
+    // "NO" would otherwise split the record into two spellings of one side, and anything
+    // grouping by side would silently under-count both.
+    side: String(opts.side).toLowerCase(),
     size: String(opts.size),
     entry_ref: String(opts.entry_ref),
     // The caller's clock is recorded but explicitly not authoritative — the anchor slot
