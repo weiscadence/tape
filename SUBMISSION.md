@@ -6,7 +6,7 @@ so the timestamp on every call is a slot the operator does not control. The tape
 because the tape's clock isn't ours.
 
 **Live on Solana mainnet, unattended, for over a week.** Not a demo run for the video:
-**more than 1,400 anchors across more than 7 unbroken days**, every one on mainnet with real
+**more than 1,700 anchors across more than 8 unbroken days**, every one on mainnet with real
 lamports, mean interval 7.4 minutes. It was still anchoring while this sentence was written
 and it is still anchoring now. Re-derive the live figures — the count moves every few
 minutes, so any number typed here is stale shortly after it is typed:
@@ -18,8 +18,8 @@ node bin/anchor-stats.js
 |  | |
 |---|---|
 | first anchor | `2026-07-28T20:36:44Z`, slot `435812245` |
-| latest at time of writing | `2026-08-05T01:54:36Z`, slot `437289045` |
-| anchors | 1,405 — all mainnet |
+| latest at time of writing | `2026-08-06T16:20:50Z`, slot `437616395` |
+| anchors | 1,724 — all mainnet |
 | gaps over 25 min | **3**: 61 min, 87 min, 27 min |
 
 The gaps are printed by that command rather than smoothed away, because they are the part
@@ -27,6 +27,22 @@ that argues against us. The 87-minute one on 2026-07-30 is the anchoring daemon 
 silently with nothing noticing — which is why `scripts/tape-health.js` exists now. A
 liveness claim from a system with no way to detect its own death is worth nothing, and we
 would rather show the hole and the fix than a clean-looking week.
+
+**Which process wrote those anchors, precisely.** Until **2026-08-06T16:23:14Z** there were
+two writers: ZeroClaw's `[cron.tape-anchor]` job, and a pm2-supervised loop running the same
+`bin/daemon.js` on a 60-second tick. We only noticed the ambiguity when someone asked whether
+the ZeroClaw part was load-bearing or decorative, so we measured instead of answering: of the
+last 300 anchors before that timestamp, **74 landed inside ZeroClaw's cron window and 226 did
+not** — so ZeroClaw was doing about a quarter of the work while the write-up implied it did
+all of it. From that timestamp the pm2 loop is stopped and **ZeroClaw's cron is the only
+process that anchors**, at `*/5`. This is checkable without trusting us: anchors after
+16:23:14Z land on the five-minute grid, and earlier ones do not. `zeroclaw cron list` shows
+the job and its last status; `~/.zeroclaw/data/cron/jobs.db` holds the run history.
+
+We are leaving the earlier mixed-provenance week in the count rather than restating it as
+though ZeroClaw alone produced it. The uptime claim is about the *record* being continuously
+anchored, which is true; the claim about *who anchored it* is now stated at the granularity
+we can actually defend.
 
 ---
 

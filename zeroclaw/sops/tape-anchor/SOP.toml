@@ -1,0 +1,21 @@
+[sop]
+name = "tape-anchor"
+description = "Commit the tape to Solana on a fixed interval and prove the newest entry verifies."
+version = "1.0.0"
+# Deterministic: the marking pipeline must not vary with model mood. The same tape state
+# must always produce the same anchor, or the record's own production is unauditable.
+deterministic = true
+execution_mode = "deterministic"
+max_concurrent = 1          # two concurrent anchors would race the chain file
+agent = "tape"              # REQUIRED: cron is headless, there is no ambient agent loop
+
+# NO cron trigger, deliberately. A deterministic SOP run needs a live agent loop to drive
+# its steps; a headless daemon has none, so an armed cron trigger here fires every interval
+# and fails with "requires an external driver" — ~96 failing runs a day in the audit log,
+# which is worse than useless because it teaches whoever reads that log to ignore red. The
+# interval anchoring is a [cron.tape-anchor] SHELL job instead, and it must be: the anchor
+# path cannot depend on a model being reachable or a quota unspent. This SOP is the
+# agent-facing pipeline, fired by hand or by the agent via sop_execute.
+
+[[triggers]]
+type = "manual"             # so `sop_execute` can fire it by hand for the demo

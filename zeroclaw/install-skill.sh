@@ -44,3 +44,18 @@ echo "installed -> $DEST"
 echo "           $(grep -c '^\[\[tools\]\]' "$DEST/SKILL.toml") tools, rooted at $ROOT"
 echo
 echo "next:  zeroclaw skills audit      # confirm ZeroClaw accepts the bundle"
+
+# The SOP ships in the repo too, for the same reason the skill bundle does: `sop validate`
+# is quoted in the write-up, and a command a reader cannot run is not evidence. Same
+# __TAPE_ROOT__ substitution, same idempotent re-install.
+SOPS_DEST="${SOPS_DEST:-$HOME/.zeroclaw/data/sops}"
+if [ -d "$ROOT/zeroclaw/sops" ]; then
+  for sop in "$ROOT"/zeroclaw/sops/*/; do
+    name="$(basename "$sop")"
+    mkdir -p "$SOPS_DEST/$name"
+    for f in SOP.toml SOP.md; do
+      [ -f "$sop/$f" ] && sed "s|__TAPE_ROOT__|$ROOT|g" "$sop/$f" > "$SOPS_DEST/$name/$f"
+    done
+    echo "installed SOP -> $SOPS_DEST/$name"
+  done
+fi

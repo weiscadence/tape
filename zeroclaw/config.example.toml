@@ -60,10 +60,21 @@ enabled = true                          # defaults false on purpose
 bot_token = "<TELEGRAM_BOT_TOKEN>"
 
 # --- narrow risk profile --------------------------------------------------------
-# Deliberately tight, not "supervised off". One binary, two roots, four auto-approved
+# Deliberately tight, not "supervised off". One binary, two roots, five auto-approved
 # tools. HONEST LIMIT: allowed_roots constrains ZeroClaw's OWN file tools, NOT a child
-# `node` process — that runs as the host user and can read the anchor key. The real
-# containment is that a memo-only T1 key holds nothing worth stealing.
+# `node` process — that runs as the host user and can read the anchor key.
+#
+# This comment used to end "the real containment is that a memo-only T1 key holds nothing
+# worth stealing." That was false and SUBMISSION.md retracts it: on 2026-07-31 we checked
+# the key instead of the sentence and found ~0.081 SOL of real mainnet SOL, a SOL transfer
+# it had already signed, and two other projects sharing it. The retraction shipped while
+# this line kept asserting the original claim — so the write-up said "we say this in the
+# config comment too" and the config comment said the opposite.
+#
+# The honest statement: a child process that can read the keypair file is OUTSIDE the
+# signing gate, so residual exposure is the key's balance, kept small on purpose and now
+# capped per day on the anchoring path. A dedicated TAPE-only key whose material never
+# sits readable on disk is the actual fix, and it is open work, not a solved problem.
 [risk_profiles.tape]
 level = "supervised"
 workspace_only = false
