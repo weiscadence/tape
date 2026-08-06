@@ -21,6 +21,7 @@ const path = require('path');
 const D = require('../lib/decimal');
 const { Chain } = require('../lib/chain');
 const { laneRecords } = require('../lib/lanes');
+const marketTitles = require('../lib/market-titles').readTitles();
 const { GateLog } = require('../lib/gate-log');
 const { fetchMarks } = require('../lib/marks');
 const { buildPositions, scorePositions, leaderboard, resolveNames } = require('../lib/score');
@@ -175,6 +176,11 @@ async function main() {
       signer: who.signer,
       market: humanMarket(s.market),
       market_raw: s.market,
+      // The venue's own words for an opaque id (delphi:0x…), cached by the gate. NOT signed and
+      // the venue can edit it, so it travels as its own field the front end labels — never merged
+      // into `market`, which must keep matching what the receipt shows as signed.
+      market_title: (marketTitles[s.market] && marketTitles[s.market].title) || null,
+      market_title_at: (marketTitles[s.market] && marketTitles[s.market].fetched_at) || null,
       lane: s.lane,
       side: s.side,
       size: s.size,
