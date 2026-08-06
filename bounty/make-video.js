@@ -54,49 +54,51 @@ function paint(body) {
     .replace(/(REFUSED|BLOCKED|FAILS CLOSED)/g, '<span class="ok">$1</span>');
 }
 
+// SCENE LIST — rebuilt 2026-08-06 around a real phone recording.
+//
+// The previous cut was eleven scenes, six of them full-screen text. The bounty asks for
+// "real agent, real channel, your use case doing the thing. No slides." Six slides is the
+// thing that sentence is pointing at, and there was no channel in it at all, because a
+// renderer cannot hold a phone. So the middle of this video is now `--phone`: an actual
+// Telegram session on an actual handset, and the scenes below are the bookends.
+//
+// Every terminal body is still read from a file produced by running the command, and they
+// now verify the SAME call the phone footage posts (seq 367, slot 437624124) — so the
+// second half checks the first half rather than being a separate anecdote.
 const SCENES = [
   { kind: 'title', big: 'TAPE',
     sub: 'an undeletable call record, running on ZeroClaw + Solana',
-    foot: 'ZeroClaw × Solana bounty submission', sec: 5 },
+    foot: 'ZeroClaw × Solana bounty submission', sec: 5, part: 'intro' },
 
   { kind: 'card', big: 'Every crypto caller has a great track record,<br>because they delete the bad calls.',
-    sub: 'TAPE is a call record they can&rsquo;t delete &mdash; because the timestamp isn&rsquo;t ours, it&rsquo;s Solana&rsquo;s.', sec: 8 },
+    sub: 'TAPE is a call record they can&rsquo;t delete &mdash; because the timestamp isn&rsquo;t ours, it&rsquo;s Solana&rsquo;s.', sec: 7, part: 'intro' },
 
-  { kind: 'term', cmd: 'node verify/tape-verify.mjs /tmp/tape-latest-receipt.json',
+  // ── the phone recording is spliced in here ──
+
+  { kind: 'term', cmd: 'node verify/tape-verify.mjs receipt-367.json',
     body: verified,
-    caption: 'A real call, checked against the chain. Exit code 0.', sec: 13 },
+    caption: 'The call you just watched him post, checked against the chain. Exit code 0.', sec: 13, part: 'outro' },
 
   { kind: 'card', big: 'This verifier shares no code<br>with the thing that wrote the record.',
-    sub: 'It talks to Solana, not to us. Our server could be gone and this still works.', sec: 9 },
+    sub: 'It talks to Solana, not to us. Our server could be gone and this still works.', sec: 8, part: 'outro' },
 
-  { kind: 'term', cmd: 'node verify/tape-verify.mjs /tmp/tape-tampered-receipt.json',
+  { kind: 'term', cmd: 'node verify/tape-verify.mjs receipt-367.json   # one digit edited',
     body: fraud,
-    caption: 'Same real call — with the entry price edited from 0.72 to 0.42. Exit code 1.', sec: 13 },
+    caption: 'Same receipt, entry price edited 0.5050 → 0.4200. Exit code 1.', sec: 13, part: 'outro' },
 
-  { kind: 'card', big: 'I changed one number in our own record.<br>Our own verifier calls us a fraud.',
-    sub: 'A verifier that can only ever confirm is a logo. This one can convict us.', sec: 10 },
-
-  { kind: 'term', cmd: 'node bounty/prompt-injection-test.js',
-    body: injectAttack,
-    caption: 'The attack is assumed to have already won — the model is building the transfer.', sec: 15 },
+  { kind: 'card', big: 'I changed one number<br>in our own record.',
+    sub: 'Our own verifier calls us a fraud. A verifier that can only ever confirm is a logo. This one can convict us.', sec: 9, part: 'outro' },
 
   { kind: 'term', cmd: 'node bounty/prompt-injection-test.js   # verdict',
     body: injectOutcome,
-    caption: 'The required fund-safety test — 3 of 3, fails closed.', sec: 14 },
+    caption: 'The required fund-safety test. The attack is assumed to have already won — the model is building the transfer — and the key still cannot express one.', sec: 13, part: 'outro' },
 
-  { kind: 'card', big: 'The defence never depends on<br>the model refusing.',
-    sub: 'The key physically cannot express a transfer. Not a policy &mdash; enforced in code, in lib/signing-policy.js, before the signer is ever reached.', sec: 11 },
-
-  // Was "Six anchors" — true on 2026-07-30 and never updated while the daemon kept
-  // running. Understating a week of unattended uptime as a handful of transactions gave
-  // away the one thing separating this from a weekend demo. Lower bounds, not a snapshot,
-  // so the frame cannot go stale again between rendering and judging.
-  { kind: 'card', big: 'Live on mainnet for over a week.<br>Unattended.',
-    sub: 'More than 1,400 anchors across 7+ unbroken days, real lamports, mean interval 7.4 minutes &mdash; still anchoring right now. It also reports our three outages (61, 87 and 27 min) rather than smoothing them: <span class="mono">node bin/anchor-stats.js</span>.', sec: 10 },
+  { kind: 'card', big: 'Live on mainnet, unattended,<br>for over a week.',
+    sub: 'More than 1,700 anchors across 8+ unbroken days, real lamports &mdash; and since 2026-08-06T16:23:14Z, ZeroClaw&rsquo;s cron is the only process that writes them. Check the grid: <span class="mono">node bin/anchor-stats.js</span>.', sec: 10, part: 'outro' },
 
   { kind: 'title', big: 'The scorekeeper can&rsquo;t cheat the score.',
     sub: 'And anyone can prove it &mdash; including against us.',
-    foot: 'github.com/weiscadence/tape', sec: 9 },
+    foot: 'github.com/weiscadence/tape', sec: 8, part: 'outro' },
 ];
 
 const CSS = `
@@ -145,15 +147,27 @@ SCENES.forEach((s, i) => {
   fs.writeFileSync(path.join(OUT, `scene-${n}.html`), html(s));
 });
 
-// ffmpeg concat list — each PNG held for its scene's duration
-const list = SCENES.map((s, i) => {
-  const n = String(i + 1).padStart(2, '0');
-  return `file 'scene-${n}.png'\nduration ${s.sec}`;
-}).join('\n');
-const lastN = String(SCENES.length).padStart(2, '0');
-fs.writeFileSync(path.join(OUT, 'concat.txt'), `${list}\nfile 'scene-${lastN}.png'\n`);
+// Two concat lists, because the phone recording goes between them. Each PNG is held for
+// its scene's duration; the concat demuxer needs the final file repeated or it drops the
+// last scene's tail.
+for (const part of ['intro', 'outro']) {
+  const idx = SCENES.map((s, i) => [s, i]).filter(([s]) => s.part === part);
+  if (!idx.length) continue;
+  const body = idx.map(([s, i]) => {
+    const n = String(i + 1).padStart(2, '0');
+    return `file 'scene-${n}.png'\nduration ${s.sec}`;
+  }).join('\n');
+  const lastN = String(idx[idx.length - 1][1] + 1).padStart(2, '0');
+  fs.writeFileSync(path.join(OUT, `concat-${part}.txt`), `${body}\nfile 'scene-${lastN}.png'\n`);
+}
 
-const total = SCENES.reduce((a, s) => a + s.sec, 0);
+// PHONE_SEC is passed in rather than probed, so this check fails loudly if the recording
+// is re-cut longer and nobody re-checks the limit. A 3:00 cap silently exceeded is a
+// disqualification, not a formatting problem.
+const PHONE_SEC = Number(process.env.PHONE_SEC || 0);
+const cards = SCENES.reduce((a, s) => a + s.sec, 0);
+const total = cards + PHONE_SEC;
 console.log(`${SCENES.length} scenes written to ${OUT}`);
-console.log(`runtime ${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')} (limit 3:00)`);
+console.log(`cards ${cards}s + phone ${PHONE_SEC}s = ${Math.floor(total / 60)}:${String(Math.round(total % 60)).padStart(2, '0')} (limit 3:00)`);
+if (!PHONE_SEC) console.error('WARNING: PHONE_SEC unset — the runtime check below is only counting the cards');
 if (total > 180) { console.error('OVER THE 3-MINUTE LIMIT'); process.exit(1); }

@@ -155,6 +155,24 @@ A single agent turn over Telegram was verified end to end: **the agent called `t
 the entry was anchored to slot 435825732, and the independent verifier returned VERIFIED** —
 no step run by hand.
 
+**And then a second person used it, which matters more than the first.** On 2026-08-06 the
+operator's colleague opened the bot on a phone, typed *"what can I call right now?"*, picked
+a market by its number from the menu, and sent `3 no 0.5050`. That is **seq 367** on the
+tape — caller `jiggyjigsters`, anchored at **slot 437624124**, verifier returns VERIFIED, and
+the whole thing is the middle of the demo video. No CLI, no market id pasted from a browser,
+no step run by hand. Every earlier call on this record was posted by one operator; this is
+the first posted by someone else through the channel.
+
+Two honest notes on it. It is a **T0** row — the verifier says so out loud, *"UNSIGNED (T0)
+— the name on this row is one anyone could type"* — because a caller typing into Telegram
+has no key, and having the operator's key sign on their behalf would attest the wrong thing:
+that our process wrote it, not that they said it. The tier system is doing exactly what it
+is for. And the argument mapping that made this work was **broken four hours earlier**: the
+model folded the market id into the price field, and nothing on the write path objected.
+`bin/post.js` now refuses a bad lane, side, or non-decimal price by name
+(`test/post-enums.test.js`, three refusals each with a negative control). A prompt is a
+request; a guard is the control.
+
 ### One design decision that changed while building it
 
 The manual `anchor-now` command **refuses** to anchor if any entry is already resolved — a
