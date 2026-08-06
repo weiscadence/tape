@@ -62,7 +62,11 @@ function receiptRoute(name, req, res) {
   try { operatorKeys = JSON.parse(fs.readFileSync(path.join(ROOT, 'operator-keys.json'), 'utf8')); }
   catch { operatorKeys = null; }
   try {
-    html = renderReceiptPage(buildReceipt(seq), { origin: ORIGIN, operatorKeys });
+    // Read per request for the same reason operatorKeys is: the gate updates this file on its
+    // own schedule and a boot-time snapshot would keep serving a stale question.
+    let marketTitles = null;
+    try { marketTitles = require('../lib/market-titles').readTitles(); } catch { marketTitles = null; }
+    html = renderReceiptPage(buildReceipt(seq), { origin: ORIGIN, operatorKeys, marketTitles });
   } catch (e) {
     // Same split the JSON endpoint makes, for the same reason: "not anchored yet" is a
     // routine fifteen-minute wait and must not render as a missing or censored entry.

@@ -185,3 +185,51 @@ test('the page states that the anchor slot is not an input', () => {
   const html = renderReceiptPage(RECEIPT, { operatorKeys: null });
   assert.match(html, /chain wins/);
 });
+
+/**
+ * An opaque market id renders as a readable question WITHOUT laundering it as signed content.
+ *
+ * The bug: receipt #326's headline was the bare 42-char Delphi address, so a human could not tell
+ * it was a bet on Guangzhou temperature without scrolling (2026-08-06). The fix pulls the question
+ * from a cache the gate writes.
+ *
+ * The risk the fix creates, which is what these tests actually guard: that question is fetched
+ * from a third party AFTER signing and the venue can edit it. If it ever renders as though it were
+ * part of the signed entry, the page's whole claim — these bytes are fixed — is quietly false for
+ * the most prominent line on it. So the annotation must be labelled, and the signed identifier
+ * must remain visible next to it.
+ */
+const DELPHI_RECEIPT = JSON.parse(JSON.stringify(RECEIPT));
+DELPHI_RECEIPT.entry.market = 'delphi:0x54932e35896a4f585e213490b089c3e318d85ec6';
+const TITLES = {
+  'delphi:0x54932e35896a4f585e213490b089c3e318d85ec6':
+    { title: 'Will ZGGG max temperature be at least 39.0C?', fetched_at: '2026-08-06T12:32:35.087Z' },
+};
+
+test('a cached market question becomes the headline but is marked unsigned', () => {
+  const html = renderReceiptPage(DELPHI_RECEIPT, { operatorKeys: null, marketTitles: TITLES });
+  assert.match(html, /Will ZGGG max temperature be at least 39\.0C\?/);
+  assert.match(html, /not part of the signed entry/);
+  assert.match(html, /the venue can edit it/);
+  // The signed identifier must survive alongside it — the annotation supplements, never replaces.
+  assert.match(html, /delphi:0x54932e35896a4f585e213490b089c3e318d85ec6/);
+});
+
+test('with no cached question the page shows only what was signed, and invents nothing', () => {
+  const html = renderReceiptPage(DELPHI_RECEIPT, { operatorKeys: null, marketTitles: {} });
+  assert.match(html, /delphi:0x54932e35896a4f585e213490b089c3e318d85ec6/);
+  assert.ok(!/not part of the signed entry/.test(html), 'no provenance band without an annotation');
+  assert.ok(!/Will ZGGG/.test(html), 'must not invent a question it never fetched');
+});
+
+test('a hostile market question cannot break out of the page', () => {
+  // Same threat as caller/note: this string comes from a third party, not from us.
+  const html = renderReceiptPage(DELPHI_RECEIPT, {
+    operatorKeys: null,
+    marketTitles: {
+      'delphi:0x54932e35896a4f585e213490b089c3e318d85ec6':
+        { title: '</div><script>alert(1)</script>', fetched_at: '2026-08-06T12:00:00Z' },
+    },
+  });
+  assert.ok(!/<script>alert\(1\)<\/script>/.test(html), 'venue-supplied text must be escaped');
+});

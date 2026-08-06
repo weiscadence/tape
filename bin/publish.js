@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const D = require('../lib/decimal');
 const { Chain } = require('../lib/chain');
+const { laneRecords } = require('../lib/lanes');
 const { GateLog } = require('../lib/gate-log');
 const { fetchMarks } = require('../lib/marks');
 const { buildPositions, scorePositions, leaderboard, resolveNames } = require('../lib/score');
@@ -244,6 +245,13 @@ async function main() {
       kept: keptOf.get(b.signer) || null,
     })),
     calls,
+    // Per-lane records. DERIVED from the signed market identifier (lib/lanes.js), not read from a
+    // signed field — see that file for why the taxonomy must not be retro-fitted into signed bytes.
+    // A combined win rate across unlike lanes is not a win rate for any of them.
+    lanes: laneRecords(calls),
+    lanes_note: 'lane is DERIVED from the signed market identifier, recomputable by anyone from '
+      + 'the public chain (lib/lanes.js). It is not a signed field. Lanes marked scored_lane:false '
+      + '(demo, board protocol, unclassified) are excluded from any lane record, never folded in.',
     totals: result.totals,
   };
 

@@ -46,6 +46,7 @@ const { GateLog } = require('../lib/gate-log');
 const { hashLeaf, buildTree, proveInclusion, verifyEntryInclusion } = require('../lib/merkle');
 const { submitAnchor, fetchAnchor } = require('../lib/anchor');
 const { resolveMarket } = require('../lib/resolve');
+const { recordTitle } = require('../lib/market-titles');
 const W = require('../lib/windows');
 
 const { DATA_DIR: DATA } = require('../lib/datadir');
@@ -158,6 +159,10 @@ async function runGate(chain, gateLog) {
       verdicts.unknown++;
       continue;
     }
+
+    // Cache the human question whenever the resolver hands one back, regardless of verdict — an
+    // open market is exactly the case where the receipt is being read and has no title yet.
+    if (res.title) { try { recordTitle(r.entry.market, res.title); } catch { /* annotation only */ } }
 
     if (!res.supported) {
       gateLog.record({ entry_hash: r.entry_hash, verdict: 'unknown', detail: res.detail });
@@ -390,6 +395,25 @@ async function main() {
       log('TICK FAILED:', e.message);
       ctx.state.lastError = { message: e.message, at: new Date().toISOString() };
       writeState({ ...ctx.state, healthy: false });
+
+      // pickRpc() used to run once, at startup, only. When the chosen endpoint died mid-run
+      // (Helius key hitting "max usage reached" 2026-08-06), every later tick kept retrying
+      // the same dead connection forever — anchoring stalled ~35min until a human noticed
+      // the ops alert and restarted the process by hand. Re-picking here is the same
+      // failover the daemon already trusts at boot, just run again on failure instead of
+      // needing a restart to reach it.
+      try {
+        const fresh = await pickRpc(payer.publicKey);
+        if (fresh !== ctx.cluster) {
+          log(`RPC re-pick after tick failure: switching to ${fresh.replace(/\?api-key=.*/, '?api-key=REDACTED')}`);
+          ctx.cluster = fresh;
+          ctx.conn = new Connection(fresh, 'confirmed');
+        }
+      } catch (pickErr) {
+        // All candidates still dead — nothing to switch to. Same as before: log and let
+        // the next interval retry.
+        log('RPC re-pick failed, all candidates still dead:', pickErr.message);
+      }
     }
   };
 
