@@ -22,3 +22,7 @@ data/
 
 # Video build intermediates (scenes, stills, captured command output).
 bounty/.video/
+
+# lane-1 prototype live-data snapshots (regenerated, not source)
+web/markets-live.json
+web/board-live.json
