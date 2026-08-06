@@ -8,14 +8,27 @@
 schema_version = 3
 
 # --- provider -------------------------------------------------------------------
-# Any ZeroClaw-supported provider works. Gemini free tier is 5 req/min, which is fine
-# because the ANCHOR path uses no model at all — only the chat-facing agent does.
+# Any ZeroClaw-supported provider works; the ANCHOR path uses no model at all, so this
+# only has to be good enough for the chat-facing agent.
+#
+# MEASURED, because "any provider works" is the kind of sentence that quietly isn't true:
+# posting one call is ~8 model calls (menu, then the post, then the anchor). On Gemini's
+# free tier that fits inside the 20-request-per-minute quota exactly once, and a second
+# take inside the same minute fails. It also mapped arguments worse — it left `lane` and
+# `size` empty where DeepSeek filled both from the menu's own output.
+[providers.models.openrouter.default]
+api_key = "<OPENROUTER_API_KEY>"
+model = "deepseek/deepseek-chat"
+# Cross-provider fallback: each alias resolves with its OWN key and endpoint, so a dead
+# balance on one does not take the agent down. Ordered, tried after this alias's models.
+fallback = ["gemini.default"]
+
 [providers.models.gemini.default]
 api_key = "<GEMINI_API_KEY>"
 model = "gemini-2.5-flash"
 
 # --- skill bundle ---------------------------------------------------------------
-# Resolves to ~/.zeroclaw/shared/skills/tape/. Provides tape_post/anchor/receipt/verify.
+# Resolves to ~/.zeroclaw/shared/skills/tape/. Provides tape_markets/post/anchor/receipt/verify.
 [skill_bundles.tape]
 
 [skills]
@@ -56,14 +69,14 @@ level = "supervised"
 workspace_only = false
 allowed_commands = ["node"]
 allowed_roots = ["/ABSOLUTE/PATH/projects/tape", "/tmp"]
-auto_approve = ["tape__tape_post", "tape__tape_anchor", "tape__tape_receipt", "tape__tape_verify"]
+auto_approve = ["tape__tape_markets", "tape__tape_post", "tape__tape_anchor", "tape__tape_receipt", "tape__tape_verify"]
 require_approval_for_medium_risk = false
 block_high_risk_commands = true
 
 # --- agent ----------------------------------------------------------------------
 [agents.tape]
 enabled = true
-model_provider = "gemini.default"
+model_provider = "openrouter.default"
 risk_profile = "tape"
 channels = ["telegram.tape"]
 skill_bundles = ["tape"]

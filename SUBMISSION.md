@@ -112,10 +112,25 @@ The no-delete guarantee dies the first time the marker forgets an open position 
 restart. That is an agent-runtime problem, not a web-app problem. Mapped onto stock ZeroClaw
 v0.8.3 primitives, no Rust, no fork:
 
+**On the version, and on why there is no plugin here.** This runs on **v0.8.3**; **v0.8.4**
+shipped 2026-08-02 and we did not upgrade in the last hours before submitting, because
+changing the runtime under a record that has been anchoring unattended for nine days is a
+worse trade than being one release behind. We did check 0.8.4's two breaking changes
+against this config: ClawHub skill sources were removed — we install from a local bundle
+and the repo contains no ClawHub reference — and `[channels.webhook.*]` now requires a
+`secret`, and we configure no webhook channel. Neither touches this setup.
+
+And the layer is a choice, not an omission. Stock release binaries ship **without** the
+`plugins-wasm` feature, so there is no plugin host to load into; a WASM component here
+would mean building the host from source to deliver something four shell tools already do
+correctly. The rules say it plainly — *"a tier 1 solution to a tier 1 problem beats
+unnecessary WASM."* Anchoring a Merkle root in a memo transaction is a tier 1 problem.
+
 | Need | ZeroClaw primitive | Status |
 |---|---|---|
 | Take calls where humans/agents already are | Telegram channel (`channels.telegram`) | **live, paired** |
-| Post / anchor / receipt / verify as agent tools | skill bundle (4 tools, `skills audit` passes) | **live** |
+| Let a human pick a market without typing a 66-char id | skill tool `tape_markets` (numbered menu, live prices) | **live** |
+| Post / anchor / receipt / verify as agent tools | skill bundle (5 tools, `skills audit` passes) | **live** |
 | Mark every interval without being asked | declarative shell cron job, `*/15 * * * *` | **live** |
 | Deterministic marking pipeline for the agent path | SOP `tape-anchor` (`sop validate` passes) | built |
 | Positions survive restart | append-only chain on disk + Solana | **live** |
@@ -185,15 +200,25 @@ node verify/controls.mjs <receipt>      # 10 verifier controls vs mainnet
 zeroclaw skills audit  ~/.zeroclaw/shared/skills/tape/tape   # passes
 zeroclaw sop validate                                        # tape-anchor: valid
 zeroclaw cron list                                           # tape-anchor */15
+zeroclaw agent -a tape -m "what can I call right now?"          # the numbered market menu
 zeroclaw agent -a tape -m "verify /tmp/tape-latest-receipt.json"
 
 # 3. check any receipt yourself, against your own RPC, with none of our code
 node verify/tape-verify.mjs receipt.json --rpc <your-rpc-url>
 ```
 
-Config: `~/.zeroclaw/config.toml` (Gemini provider, `telegram.tape` channel, `tape` skill
-bundle, narrow `tape` risk profile, `tape-anchor` cron). Anchor key is a memo-only T1 hot
-wallet. Full annotated copy in `zeroclaw/config.example.toml`.
+Config: `~/.zeroclaw/config.toml` (`openrouter.default` provider running
+`deepseek/deepseek-chat` with `gemini.default` as a cross-provider fallback,
+`telegram.tape` channel, `tape` skill bundle, narrow `tape` risk profile, `tape-anchor`
+cron). Anchor key is a memo-only T1 hot wallet. Full annotated copy in
+`zeroclaw/config.example.toml`.
+
+The provider choice is measured, not preference. Posting one call is about eight model
+calls — menu, post, anchor — which fits inside Gemini's free-tier 20-per-minute quota
+exactly once; a second attempt in the same minute fails. Gemini also filled the tool
+arguments worse, leaving `lane` and `size` empty where DeepSeek took both from the menu's
+own output. The fallback is configured the other way round on purpose: each alias resolves
+with its own key and endpoint, so an empty balance on one does not take the agent down.
 
 ## What is honestly still open
 
