@@ -39,6 +39,26 @@ process that anchors**, at `*/5`. This is checkable without trusting us: anchors
 16:23:14Z land on the five-minute grid, and earlier ones do not. `zeroclaw cron list` shows
 the job and its last status; `~/.zeroclaw/data/cron/jobs.db` holds the run history.
 
+**And then that claim broke, for 78 minutes, hours before we posted this.** Stopping the pm2
+loop was not the same as removing it: a stale health-check prescription restarted the
+deprecated standalone daemon at **19:23Z**, and it spent 78 minutes re-anchoring an unchanged
+root alongside the real cron until we removed it (not stopped — removed, and saved the
+process list) at **20:42Z**. We are writing it down rather than quietly re-cutting the window,
+because we had already invited you to run the grid check, and run tonight it would have
+contradicted us. Run it anyway — the lapse and the fix are both visible in it:
+
+| window | anchors | on the `*/5` grid |
+|---|---|---|
+| 16:23Z → 19:23Z — after the cutover | 37 | 36 (97%) |
+| 19:23Z → 20:42Z — **the lapse** | 28 | 20 (71%) |
+| 20:42Z → 21:30Z — after removal | 10 | 10 (100%) |
+
+Counted from `data/anchors.jsonl` on `blockTime`, on-grid meaning within 90s of a five-minute
+boundary; the last row keeps growing, so re-count it rather than trusting the number here.
+
+The general lesson is the one this whole project is about: a claim that nothing re-checks
+decays into a false claim without anyone lying. The record caught this one.
+
 We are leaving the earlier mixed-provenance week in the count rather than restating it as
 though ZeroClaw alone produced it. The uptime claim is about the *record* being continuously
 anchored, which is true; the claim about *who anchored it* is now stated at the granularity
