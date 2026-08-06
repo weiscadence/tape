@@ -1,0 +1,9 @@
+**Which ZeroClaw features it uses** — Telegram channel (`channels.telegram`) to take calls where people already are, live and paired; a 4-tool skill bundle for post/anchor/receipt/verify (`skills audit` passes); a declarative cron job `*/15 * * * *` that marks every interval without being asked; and a narrow `tape` risk profile so the anchor key can't be talked into anything else. The `tape-anchor` SOP validates and is built, but the **cron path** is what's been running unattended — I'd rather say which is which than let you assume.
+
+**Custody: T1, and honest about what that buys.** The README says exactly what it does and doesn't — including a correction where we checked the key instead of our own sentence and found an earlier claim of ours was wrong. Blast radius today is the anchor key's balance, not zero. A dedicated TAPE-only key is the real fix and it's named as still-open, not hidden.
+
+**Reproduce it in under a minute.** "See it work in 60 seconds" at the top of the README. The two verifier commands need no `npm install` — `verify/*.mjs` has zero npm dependencies and imports nothing from our `lib/`, because a verifier that needs our code installed is one that trusts our code. Verified from a clean public clone today: exit 0, exit 0, exit 1 on the tampered receipt, exactly as documented.
+
+Full write-up, threat model, custody tiers and what's still open: `SUBMISSION.md` and `THREAT-MODEL.md` in the repo.
+
+One line no leaderboard can say: **the scorekeeper can't cheat the score, and anyone can prove it — including against us.**

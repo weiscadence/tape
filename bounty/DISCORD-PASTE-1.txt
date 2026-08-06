@@ -1,0 +1,13 @@
+**TAPE — an undeletable call record, running on ZeroClaw + Solana**
+
+Every crypto caller has a great track record, because they delete the bad calls. TAPE is a call record they can't delete — the timestamp isn't ours, it's Solana's.
+
+A ZeroClaw agent takes trading/prediction calls on a real Telegram channel, commits each into a Merkle root, and anchors that root to Solana mainnet. One rule: **post a position and it stays open and marks to market until you publicly close it.** No delete, no edit, no quiet abandonment. A 90% win rate with one −$400k open bag ranks below 55% with clean books.
+
+**Live on mainnet, unattended, for over a week — not a demo built for the video.** 1,700+ anchors across 8+ unbroken days, all mainnet, real lamports, mean interval 7.4 min. Still anchoring right now. `node bin/anchor-stats.js` prints the live figure — and prints our three outages (61, 87, 27 min) rather than smoothing them, because the 87-minute one was the daemon dying silently with nothing noticing. That's why it has a health canary now.
+
+**The part I'd actually like you to attack: the verifier can convict us.** It shares no code with the thing that writes the records, and it talks to Solana, not to our server. In the video I edit one number in our own published receipt (0.72 → 0.42) and run it: our own tool prints `FRAUD` and exits 1. A verifier that can only ever confirm is a logo.
+
+**Fund safety.** Our prompt-injection test assumes the attack already fully succeeded — the model is compromised and assembling the attacker's transfer. It still fails, because the anchor key *cannot express* a transfer: `lib/signing-policy.js` is a deny-by-default gate certifying the serialized tx against intent (`{ComputeBudget, Memo}`, payer-only) before the signer is reached. So "refused" is distinguishable from "sent and failed". 3/3, fails closed.
+
+Repo: https://github.com/weiscadence/tape
