@@ -199,7 +199,7 @@ function describeKeypair(file) {
 }
 
 function checkAnchorKey() {
-  const file = process.env.TAPE_KEY || path.join(HOME, '.config/cadence-secure/faucet-wallet.json');
+  const file = process.env.TAPE_KEY || path.join(HOME, '.config/cadence-secure/tape-anchor-key.json');
   if (!fs.existsSync(file)) {
     return report('FAIL', 'anchor key', `not found at ${file}`,
       `solana-keygen new -o ${file}   # or set TAPE_KEY=/path/to/keypair.json`);
@@ -280,6 +280,32 @@ function observedAnchorBurn(windowHours = 24) {
   };
 }
 
+/**
+ * Who paid for the most recent anchor, according to Solana. Account 0 of a transaction's
+ * message is the fee payer, so this is the chain's own answer to "which wallet is funding
+ * this tape", independent of whatever key this process happened to resolve.
+ *
+ * Returns null when it cannot tell — no anchors yet, or the RPC would not answer. A null
+ * means "unknown", and the caller must not read it as "matches".
+ */
+async function observedAnchorPayer(url) {
+  const { DATA_DIR } = require('../lib/datadir');
+  const file = path.join(DATA_DIR, 'anchors.jsonl');
+  if (!fs.existsSync(file)) return null;
+  const lines = fs.readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
+  for (let i = lines.length - 1; i >= 0 && i > lines.length - 5; i--) {
+    let sig; try { sig = JSON.parse(lines[i]).signature; } catch { continue; }
+    if (!sig) continue;
+    try {
+      const r = await postRpc(url, { jsonrpc: '2.0', id: 1, method: 'getTransaction',
+        params: [sig, { encoding: 'json', maxSupportedTransactionVersion: 0 }] });
+      const keys = r.result && r.result.transaction && r.result.transaction.message.accountKeys;
+      if (keys && keys.length) return keys[0];
+    } catch { /* try the one before it */ }
+  }
+  return null;
+}
+
 async function checkRpcAndBalance(anchorPub) {
   const url = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
   let slot;
@@ -294,8 +320,35 @@ async function checkRpcAndBalance(anchorPub) {
   }
 
   if (!anchorPub) return;
+
+  // WHICH WALLET IS ACTUALLY PAYING? Ask the chain, not our own default.
+  //
+  // checkAnchorKey and the anchor daemon resolve the same `TAPE_KEY || <default>` expression,
+  // so they agree only while the default is right. Until 2026-08-06 that default was
+  // `faucet-wallet.json` in both, and pm2 overrode TAPE_KEY for the daemon while the operator
+  // ran this doctor from a plain shell with TAPE_KEY unset. The two disagreed silently: the
+  // daemon paid from 2FruM… while the doctor reported the balance of
+  // 6QRMC…, a wallet deliberately swept empty on 2026-08-04. On 2026-08-06 that produced a
+  // confident "7.3 hours of runway, send SOL now" alarm about a decommissioned wallet, while
+  // the real payer held 20 days. The inverse is the dangerous direction and was equally
+  // live: had the REAL wallet been draining, this check could never have said so. Its alarm
+  // was unreachable.
+  //
+  // So the payer is read off the most recent anchor we published, and a disagreement with
+  // the configured key is itself a finding rather than a silent substitution.
+  let payer = anchorPub;
+  const observed = await observedAnchorPayer(url);
+  if (observed && observed !== anchorPub) {
+    payer = observed;
+    report('FAIL', 'anchor key mismatch',
+      `configured key is ${anchorPub}, but the last anchor was paid by ${observed} — balance below is the REAL payer`,
+      `export TAPE_KEY=$(pm2 env $(pm2 id tape-anchor 2>/dev/null) 2>/dev/null | sed -n 's/^TAPE_KEY: //p')   # or run the doctor with the daemon's env`);
+  } else if (observed) {
+    report('PASS', 'anchor key in use', `${observed} signed the most recent anchor (matches configured key)`);
+  }
+
   try {
-    const r = await postRpc(url, { jsonrpc: '2.0', id: 1, method: 'getBalance', params: [anchorPub] });
+    const r = await postRpc(url, { jsonrpc: '2.0', id: 1, method: 'getBalance', params: [payer] });
     const lamports = r.result && r.result.value;
     const sol = (lamports || 0) / 1e9;
     // Runway is measured, not assumed. This used to hardcode "~0.000006 SOL per anchor" —
@@ -310,7 +363,7 @@ async function checkRpcAndBalance(anchorPub) {
       // No ledger to measure from. Say that rather than substituting a guess.
       if (sol >= 0.001) report('PASS', 'anchor balance', `${sol.toFixed(6)} SOL`);
       else report('WARN', 'anchor balance', `${sol.toFixed(6)} SOL — low, and no anchor history to size the runway from`,
-        `send SOL to ${anchorPub}`);
+        `send SOL to ${payer}`);
       return;
     }
     const left = Math.floor(lamports / burn.lamports);
@@ -318,7 +371,7 @@ async function checkRpcAndBalance(anchorPub) {
     const runway = hours === Infinity ? 'no recent anchors, runway unbounded'
       : `~${left} anchors ≈ ${hours < 48 ? hours.toFixed(1) + 'h' : (hours / 24).toFixed(1) + 'd'} at ${burn.perHour.toFixed(1)}/h`;
     const detail = `${sol.toFixed(6)} SOL — ${runway}`;
-    const fix = `send SOL to ${anchorPub}   # ${(burn.lamports / 1e9).toFixed(8)} SOL per anchor, measured over ${burn.n} anchors in 24h`;
+    const fix = `send SOL to ${payer}   # ${(burn.lamports / 1e9).toFixed(8)} SOL per anchor, measured over ${burn.n} anchors in 24h`;
     // Under a day of runway is not a warning, it is a deadline.
     if (hours < 24) report('FAIL', 'anchor balance', detail, fix);
     else if (hours < 24 * 7) report('WARN', 'anchor balance', detail, fix);

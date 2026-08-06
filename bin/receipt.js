@@ -10,10 +10,14 @@
  * carries the full entry rather than a lookup id. An id would make the record queryable
  * only through whoever holds the database.
  *
- * WHICH ANCHOR: the EARLIEST one whose batch covers this entry. Anchors are cumulative,
- * so a later anchor also contains the entry and would still verify — but it asserts a
- * weaker time bound, and the entry's whole value is the tightest provable "no later
- * than". Handing out the loosest available bound would quietly degrade every claim.
+ * WHICH ANCHOR (changed 2026-08-05, Jiggy's call): verify against the LATEST covering
+ * anchor, and carry the EARLIEST as `tightest`. Anchors are cumulative, so any anchor
+ * after an entry contains it. The earliest gives the tightest "no later than" bound — but
+ * it is also the one most likely to be PRUNED off cheap public RPC nodes (publicnode drops
+ * history after ~2 days), which made honest old receipts read "can't tell" for a verifier
+ * on a free node. The newest anchor is always fresh, so it verifies on ANY node, green or
+ * red, never amber. We keep the tight bound as a claim (`tightest`) that anyone with an
+ * archival node can still confirm — nothing is lost, the default check just always completes.
  */
 
 const fs = require('fs');
@@ -56,7 +60,9 @@ function buildReceipt(selector) {
   if (idx < 0 || idx >= rows.length) throw new Error(`no entry for selector ${selector}`);
   const row = rows[idx];
 
-  const anchor = anchors.find((a) => a.count > idx);
+  const covering = anchors.filter((a) => a.count > idx);
+  const anchor = covering[covering.length - 1];   // LATEST: always fresh, verifies on any node
+  const earliest = covering[0];                    // tightest provable bound, may be pruned
   if (!anchor) {
     throw new Error(
       `entry ${idx} (${row.entry_hash}) is not covered by any anchor yet. ` +
@@ -90,6 +96,12 @@ function buildReceipt(selector) {
       cluster: anchor.cluster,
       explorer: `https://solscan.io/tx/${anchor.signature}`,
     },
+    // The tightest provable "no later than", carried as a claim. The default check verifies
+    // against `anchor` (latest) and always completes; a verifier who wants this tighter bound
+    // can confirm `tightest.signature` on an archival node. Same entry, earlier commitment.
+    tightest: earliest && earliest.signature !== anchor.signature
+      ? { slot: earliest.slot, signature: earliest.signature }
+      : null,
     entry_hash: row.entry_hash,
     seq: row.seq,
   };

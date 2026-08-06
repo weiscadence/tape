@@ -366,7 +366,7 @@ async function tick(ctx) {
 async function main() {
   const once = process.argv.includes('--once');
   const payer = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(fs.readFileSync(process.env.TAPE_KEY || path.join(SECURE, 'faucet-wallet.json'), 'utf8')))
+    Uint8Array.from(JSON.parse(fs.readFileSync(process.env.TAPE_KEY || path.join(SECURE, 'tape-anchor-key.json'), 'utf8')))
   );
   const cluster = await pickRpc(payer.publicKey);
   const ctx = {

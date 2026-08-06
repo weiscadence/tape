@@ -79,9 +79,13 @@ function receiptRoute(name, req, res) {
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'content-length': buf.length,
-    // Anchored receipts are immutable by construction; the pending and missing pages are
-    // states that change within minutes and must never be cached as if they were the answer.
-    'cache-control': status === 200 ? 'public, max-age=300' : 'no-store',
+    // The receipt now proves against the LATEST covering anchor (see bin/receipt.js, 2026-08-05),
+    // so it advances as new anchors land — it is no longer immutable. A long cache served a stale
+    // receipt pointing at an anchor a pruning RPC had since dropped, which read as amber "can't
+    // tell" on a fresh visit (Jiggy hit this). Revalidate every load so the receipt is always
+    // anchored recently enough to verify on any node. The entry it proves is still immutable; only
+    // which fresh anchor witnesses it changes.
+    'cache-control': status === 200 ? 'no-cache, must-revalidate' : 'no-store',
     'x-content-type-options': 'nosniff',
   });
   res.end(req.method === 'HEAD' ? undefined : buf);
@@ -97,7 +101,11 @@ const server = http.createServer((req, res) => {
   let name;
   try { name = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, ''); }
   catch { name = ''; }
-  if (name === '') name = 'index.html';
+  // "/" is now the marketing landing; the app/board lives at "/app". Old links to "/" that
+  // meant the board are handled by the landing's own "Enter the app" button, and /app.html
+  // is accepted as a synonym so a stale bookmark still resolves.
+  if (name === '') name = 'landing.html';
+  else if (name === 'app' || name === 'app.html') name = 'index.html';
 
   // Scorer source bundles: scorers/<64-hex>.json. These cannot be a fixed allowlist entry
   // because the name IS the content digest and a new one appears whenever the scoring code

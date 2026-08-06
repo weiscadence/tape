@@ -51,7 +51,7 @@ const GENESIS_CALLS = [
   const dry = process.argv.includes('--dry-run');
 
   const payer = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(fs.readFileSync(process.env.TAPE_KEY || path.join(SECURE, 'faucet-wallet.json'), 'utf8')))
+    Uint8Array.from(JSON.parse(fs.readFileSync(process.env.TAPE_KEY || path.join(SECURE, 'tape-anchor-key.json'), 'utf8')))
   );
   const conn = new Connection(RPC, 'confirmed');
   const before = await conn.getBalance(payer.publicKey);
