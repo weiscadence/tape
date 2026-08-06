@@ -90,3 +90,27 @@ Lanes 2–4 slot in behind the same account + leaderboard frame once their oracl
 The app posts calls and proves identity. **It never signs a transfer.** Wallet-connect is a
 signed nonce, not spend authority. If a future button ever moves funds it's a T2 feature with
 its own caps/allowlist/approval gate — not smuggled into a leaderboard.
+
+---
+
+## The funnel (Jiggy's architecture question, 2026-08-06)
+
+**landing → bot → mini app → login → in.** Concretely:
+
+1. **Landing page** = `tape.drainfun.xyz` (already live, the stylized one). Add one CTA:
+   **"Open in Telegram"** → `https://t.me/TAPEtapebotbot?startapp` (the bot exists:
+   `@TAPEtapebotbot`, id 8603489891, token in `~/.config/cadence-secure/tape-bot.json`).
+2. **The bot** (`@TAPEtapebotbot`) — currently **bare** (default menu button, no `/start`,
+   no description). To wire: `setChatMenuButton` → a `web_app` button pointing at the mini-app
+   URL; set `/start` to a short welcome + a "Launch TAPE" web_app button; set description.
+   All doable via the Bot API in one pass — additive, reversible.
+3. **Mini app opens** inside Telegram. `initData` (Telegram's signed identity) logs the user
+   in with **zero taps**. First run shows the **welcome/login gate** (built v4).
+4. **In.** Markets / Leaderboard / My Record.
+
+**The one blocker to wiring it for real:** a Telegram mini app URL **cannot sit behind basic
+auth** — Telegram loads it in its in-app browser and the user can't pass an auth prompt. So
+the app has to be served at a **public** URL (e.g. `tape.drainfun.xyz/app`, no auth) before
+the bot's menu button can point at it. That's a "make the prototype public" decision — not
+doing it unilaterally while taps are still mocked. Once the real call path is wired (Telegram
+login + one live anchor), publishing it and flipping the bot's menu button is ~20 minutes.
