@@ -77,6 +77,16 @@
     border-top:1px dashed var(--line);padding-top:12px}
   .rule b{color:var(--ink)}
 
+  .attach{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px}
+  .attach-h{color:var(--gold);font-weight:800;font-size:13px;margin-bottom:6px}
+  .attach p{color:var(--dim);font-size:12.5px;margin:0 0 11px;line-height:1.45}
+  .attach-row{display:flex;align-items:center;gap:10px;background:#1b1f26;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .attach-row b{display:block;font-size:14px}
+  .attach-row span{color:var(--dim);font-size:12px}
+  .attach-btn{margin-left:auto;background:var(--gold);border:0;color:#1a1204;font-weight:800;
+    font-size:13px;padding:9px 16px;border-radius:9px;cursor:pointer}
+  .attach-btn.done{background:var(--yes);color:#04180d}
+
   /* toast */
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(30px);
     background:#04180d;border:1px solid var(--yes);color:#c8f7dc;padding:11px 16px;border-radius:11px;
@@ -98,12 +108,12 @@
     <div class="badge">
       <div class="ring"><i>🎯</i></div>
       <div class="who">
-        <b>@jiggyjigsters</b>
-        <span>unsigned — connect wallet to earn the badge</span>
+        <b>@jiggyjigsters <span style="color:var(--yes);font-size:12px">✓ signed in</span></b>
+        <span>via Telegram — zero taps. Verify a wallet for the gold badge ◈</span>
       </div>
       <div class="verified">
-        <b>Connect →</b>
-        <span>record on-chain</span>
+        <b>Verify ◈</b>
+        <span>optional</span>
       </div>
     </div>
   </header>
@@ -121,7 +131,7 @@
     </section>
 
     <section class="view" id="board">
-      <p class="hint">Ranked by edge vs just holding SOL, over settled calls. Gold = wallet-verified caller (the badge). Computed from the anchored record — not our word.</p>
+      <p class="hint">Fresh start — two founding callers. Ranked by edge over settled calls, computed from the anchored record. Gold ◈ = wallet-verified. (Test data hidden, not deleted — the chain is append-only.)</p>
       <div class="lb" id="lblist"></div>
       <div class="rule">
         <b>The one rule:</b> a call stays open and marks to market until you publicly close it.
@@ -130,11 +140,21 @@
     </section>
 
     <section class="view" id="me">
-      <p class="hint">Your calls, anchored. This is the badge — a track record no one, including us, can doctor.</p>
+      <p class="hint">You're already an account — Telegram signed you in. Make a call and it's anchored under you.</p>
       <div class="lb">
-        <div class="r"><div class="rank">•</div><div class="id"><b>Connect a wallet to start</b><span class="tag">your calls become a portable, on-chain reputation</span></div></div>
+        <div class="r"><div class="rank">🎯</div><div class="id"><b>@jiggyjigsters</b><span class="tag">signed in via Telegram · 0 calls yet</span></div><div class="edge flat">—</div></div>
       </div>
-      <div class="rule"><b>Why connect:</b> an unsigned handle can be squatted. A wallet signature proves the record is yours — and because every call is on Solana's clock, your history can't be rewritten after the outcome.</div>
+
+      <div class="attach">
+        <div class="attach-h">◈ Attach an AI caller</div>
+        <p>Link an agent's track record to your account. Its calls show under your profile, tagged as the agent's — its wins become part of your book, and everyone can see which calls were yours vs the AI's.</p>
+        <div class="attach-row">
+          <div><b>Cadence 〰️</b><span>+1.84 edge · 1W/0L · agent</span></div>
+          <button class="attach-btn">Attach</button>
+        </div>
+      </div>
+
+      <div class="rule"><b>The badge:</b> Telegram already proves it's you to us. Verifying a wallet makes it provable to <i>everyone</i> — and because every call is on Solana's clock, your history can't be rewritten after the outcome. No funds move, ever — connecting is a signature, not a payment.</div>
     </section>
   </main>
 </div>
@@ -167,12 +187,10 @@ function renderBoard() {
   const el = document.getElementById('lblist');
   const sorted = [...BOARD].map(b=>({...b,edge:Number(b.edge)})).sort((a,b)=>b.edge-a.edge);
   el.innerHTML = sorted.map((b, i) => {
-    const signed = /…/.test(b.caller); // wallet-address callers render as 8frH…392d
-    const unsigned = b.caller.startsWith('unsigned:');
-    const name = unsigned ? '@' + b.caller.slice(9) : b.caller;
-    const tag = signed ? '<span class="tag signed">◈ wallet-verified</span>'
-              : unsigned ? '<span class="tag">unsigned handle</span>'
-              : '<span class="tag">agent</span>';
+    const name = b.caller;
+    const tag = b.kind === 'agent' ? '<span class="tag">◈ AI caller · attachable</span>'
+              : b.kind === 'verified' ? '<span class="tag signed">◈ wallet-verified</span>'
+              : '<span class="tag">human · Telegram</span>';
     const e = b.edge, cls = e > 0.01 ? 'up' : e < -0.01 ? 'down' : 'flat';
     const es = (e >= 0 ? '+' : '') + e.toFixed(2);
     return `<div class="r">
@@ -191,6 +209,11 @@ document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => {
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b===btn));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id===btn.dataset.v));
 });
+
+// attach-AI mock
+document.querySelector('.attach-btn').onclick = (e) => {
+  e.target.textContent = '✓ Attached'; e.target.classList.add('done');
+};
 
 // mock call
 const fakeSig = () => { const c='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
