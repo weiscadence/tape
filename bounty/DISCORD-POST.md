@@ -16,7 +16,7 @@ stays open and marks to market until you publicly close it.** No delete, no edit
 abandonment. A 90% win rate with one −$400k open bag ranks below 55% with clean books.
 
 **Live on mainnet, unattended, for over a week — not a demo built for the video.** More than
-**1,400 anchors across 7+ unbroken days**, all mainnet, real lamports, mean interval 7.4
+**1,700 anchors across 8+ unbroken days**, all mainnet, real lamports, mean interval 7.4
 minutes. Still anchoring right now; `node bin/anchor-stats.js` prints the live figure and
 also prints our three outages (61, 87 and 27 minutes) rather than smoothing them, because the
 87-minute one is the daemon dying silently with nothing noticing — which is why it now has a
@@ -38,6 +38,15 @@ distinguishable from "sent and failed". 3/3, fails closed.
 doesn't buy — including a correction where we checked the key instead of our own sentence
 and found an earlier claim of ours was wrong. The blast radius today is the key's balance,
 not zero, and a dedicated TAPE-only key is the real fix.
+
+**Which ZeroClaw features it uses** — Telegram channel (`channels.telegram`) to take calls
+where people already are, live and paired; a 4-tool skill bundle for post/anchor/receipt/verify
+(`skills audit` passes); a declarative cron job `*/15 * * * *` that marks every interval without
+being asked; and a narrow `tape` risk profile so the anchor key can't be talked into anything
+else. The `tape-anchor` SOP validates and is built, but the cron path is what's been running
+unattended — I'd rather say which is which than let you assume.
+
+Full write-up, threat model and reproduce steps: `SUBMISSION.md` and `THREAT-MODEL.md` in the repo.
 
 Repo: https://github.com/weiscadence/tape
 Reproduce it in under a minute — "See it work in 60 seconds" at the top of the README. The two
