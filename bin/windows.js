@@ -33,7 +33,8 @@ const B = require('../lib/beacon');
 const { checkSchedule } = require('../lib/schedule-check');
 const { GRID_SEC, gridAsOf } = require('../lib/asof');
 
-const DATA = path.join(__dirname, '..', 'data');
+// See lib/datadir.js — one resolver, honoured everywhere.
+const { DATA_DIR: DATA } = require('../lib/datadir');
 // Overridable so a full epoch can be rehearsed end to end against a throwaway chain
 // before it is run against the real one. Rehearsing on the live tape is not a rehearsal.
 const CHAIN = process.env.TAPE_CHAIN || path.join(DATA, 'tape.jsonl');

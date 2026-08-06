@@ -20,7 +20,8 @@ const { fetchMarks } = require('../lib/marks');
 const { buildPositions, scorePositions, leaderboard } = require('../lib/score');
 const { gridAsOf, checkAsOf } = require('../lib/asof');
 
-const DATA = path.join(__dirname, '..', 'data');
+// See lib/datadir.js — one resolver, honoured everywhere.
+const { DATA_DIR: DATA } = require('../lib/datadir');
 const argv = process.argv.slice(2);
 const asJson = argv.includes('--json');
 const asOfArg = argv.indexOf('--as-of');

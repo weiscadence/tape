@@ -225,6 +225,13 @@ async function handleCall(req, res) {
       side: input.side, size: input.size, entry_ref: input.entry_ref,
       ts_claimed: input.ts_claimed, ref: input.ref ?? null, nonce: input.nonce,
       note: input.note ?? null, signer: input.signer ?? null, sig: input.sig ?? null,
+      // PASS THROUGH, NEVER SUPPLY. On this endpoint the caller signs, so the not-before
+      // binding has to be inside what THEY signed — a beacon added server-side would both
+      // break their signature and turn their commitment into ours, which is the whole
+      // thing this bound exists to avoid. Dropping it here would be worse than ignoring
+      // it: the rebuilt entry would hash differently and their valid signature would be
+      // reported as invalid.
+      beacon: input.beacon ?? null,
     });
   } catch (e) {
     return json(res, 400, { ok: false, error: `rejected: ${e.message}` });
@@ -253,7 +260,9 @@ async function handleCall(req, res) {
       return json(res, 400, { ok: false, error: `no resolver for this market: ${r.detail}`,
         supported: ['github:<owner>/<repo>/pull/<n>:merged_by:<iso>', 'github:<owner>/<repo>:<a>_merges_before_<b>',
           'pyth:<BTC|SOL|ETH>:<above|below>:<price>@<iso>  (e.g. pyth:SOL:above:200@2026-08-01T00:00:00Z)',
-          'demo:<BTC|SOL|ETH>_<above|below>_<price>_by_<date>  (e.g. demo:BTC_above_150k_by_2026-09-01)'] });
+          'demo:<BTC|SOL|ETH>_<above|below>_<price>_by_<date>  (e.g. demo:BTC_above_150k_by_2026-09-01)',
+          'polymarket:<0x conditionId>  (any real Polymarket binary Yes/No market)',
+          'delphi:<0x market address>  (Gensyn Delphi Agent Arena binary market)'] });
     }
     if (r.resolved) {
       return json(res, 409, { ok: false,

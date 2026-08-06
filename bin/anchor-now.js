@@ -27,7 +27,9 @@ const heliusKey = (() => {
   return k.api_key || k.key || k.apiKey || Object.values(k).find((v) => typeof v === 'string' && v.length > 20);
 })();
 const RPC = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
-const DATA = path.join(__dirname, '..', 'data');
+// See lib/datadir.js — one resolver, honoured everywhere, so a writer and a reader can
+// never be aimed at different tapes by a stray env var.
+const { DATA_DIR: DATA } = require('../lib/datadir');
 
 async function anchorNow({ dry = false } = {}) {
   const payer = Keypair.fromSecretKey(

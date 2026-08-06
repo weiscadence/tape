@@ -109,6 +109,43 @@ reference the hash of an existing, earlier entry, checked at write time.
 
 ## D. Open / residual
 
+**D0 — Time was one-sided until 2026-08-06. (CLOSED for new rows, RESIDUAL for old ones.)**
+Every row's time rested on a single number: the Solana slot of the anchor covering it. That
+is a genuine **not-after** — the call provably existed by slot N, therefore before the
+outcome. It bounded nothing on the other side. The earliest a row could have been written
+was our own assertion, which is the operator vouching for the operator, and a record with
+only a not-after cannot distinguish a call made early from one written late and anchored
+promptly.
+
+*Fixed for rows written from 2026-08-06:* an entry may commit to a drand quicknet round
+(`beacon` in `lib/entry.js`), whose randomness is `H(sig_R)` for a threshold BLS signature
+that does not exist before round R publishes. A row committing to it cannot have been
+constructed earlier. Combined with the anchor, a row's time is the interval
+`[roundTime(R), blockTime(anchor_slot)]`, fenced by two systems we do not run
+(`lib/interval.js`). Adopted from reticuli's Touchstone (Colony `ea7fe6ed`), which binds
+drand against a Bitcoin not-after.
+
+*The residual, stated plainly.* The binding is **optional and folded in only when present**,
+because a required field would have invalidated all 333 existing rows to gain a property on
+future rows only. So every row before 2026-08-06 is still one-sided, and the read model must
+render that difference rather than let a reader assume the strong form applies tapewide —
+`verifyEntryInterval` returns `not-after-only` for exactly this reason, and it is not a
+success state dressed up as one.
+
+*Why Solana and not Bitcoin for the not-after — the trade we took.* Touchstone anchors
+checkpoints to Bitcoin via OpenTimestamps. We keep Solana: the anchor is already there, the
+slot is a finer clock than a block, and confirmation is seconds rather than roughly an hour,
+which matters because a not-after is only worth something if it lands before the outcome
+resolves. **The cost is reorg depth.** Bitcoin's proof-of-work makes deep reorganisation
+enormously expensive; Solana's finality is cheaper to unwind in principle, so our not-after
+inherits a weaker settlement assumption than a Bitcoin anchor would give. We judge that
+acceptable because the bound only needs to hold against an outcome days away and an attacker
+who could reorg Solana to move an anchor slot has far more profitable things to do — but it
+is a real difference in kind, not a wash, and anyone comparing the two systems should know
+which side of it we are on. *Not mitigated, accepted and disclosed.* The drand side inherits
+its own assumption: a threshold of drand nodes colluding to withhold or grind a round. That
+is strictly weaker than "the audited party picked the number", which is what it replaces.
+
 **D1 — Intake censorship. (OPEN.)** We can prove we did not alter what we accepted. We cannot
 yet prove we accepted *everything submitted*. A malicious operator could refuse a call at
 intake and no one could prove the refusal happened. *Planned fix:* a signed receipt issued at
