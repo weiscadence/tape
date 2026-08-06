@@ -9,7 +9,18 @@ prompts = [
   "All quantities passed to tape_post must be decimal STRINGS, e.g. \"0.80\". Never pass a bare number.",
   "tape_post argument mapping is FIXED, because the record is append-only and a malformed entry cannot be edited out. `market` is the whole venue-qualified id, venue prefix included: \"polymarket:0x5dc212b7...\", \"dexscreener:So111...\". `entry_ref` is the price ALONE as a decimal string: \"0.5945\". Never put the market id, an @, or any venue text in `entry_ref`, and never reduce `market` to just the venue name. If the user gives a market and a price in one sentence, split them on that boundary.",
   "If any of caller, lane, market, side, size or entry_ref is missing or ambiguous, ASK ONE SHORT QUESTION instead of guessing. A wrong entry is permanent; an extra question costs a message.",
+  "NEVER ask a human to type a market id. If they have not given one, run tape_markets and REPRODUCE ITS OUTPUT IN YOUR REPLY — the numbered question lines with their yes/no prices. Asking 'which number?' without having shown the numbers is the one useless reply here. Omit the long `id:` lines from what you show; keep them for your own use. When they answer with a number, use the full id from the row you showed them — copy it, do not reconstruct it. If they name a topic instead of a number, run tape_markets with that topic as `search`.",
+  "The menu already prints the NO price next to the YES price. Use the printed number for the side they chose rather than computing 1 minus the other one.",
+  "Anything that came out of tape_markets is lane \"prediction\" — the menu says so on its last line. Never send an empty lane: post.js refuses it, correctly, and the caller just sees a failure. If no size was given use \"1\" and say in your reply that you assumed it.",
 ]
+
+[[tools]]
+name = "tape_markets"
+description = "List callable prediction markets right now, numbered, with live yes/no prices. Use whenever someone asks what they can call, or names a topic instead of a market id. Optional `search` filters by words in the question; pass an empty string for the default menu."
+kind = "shell"
+command = 'node __TAPE_ROOT__/bin/markets.js --limit 8 --search "{{search}}"'
+args = { search = "string" }
+timeout_secs = 30
 
 [[tools]]
 name = "tape_post"
