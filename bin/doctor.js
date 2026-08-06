@@ -250,6 +250,36 @@ function postRpc(url, body, timeoutMs = 12000) {
   });
 }
 
+/**
+ * What an anchor actually costs, and how fast we spend them — read off the anchor log
+ * rather than assumed. Returns null when there is nothing to measure, because a runway
+ * computed from no data is a guess wearing a number's clothes, and the caller should say
+ * so out loud instead of printing a confident hour count.
+ *
+ * `lamports` is the median, not the mean: one retried or congested anchor at 10x should
+ * not move the runway estimate the operator is about to make a funding decision on.
+ */
+function observedAnchorBurn(windowHours = 24) {
+  const { DATA_DIR } = require('../lib/datadir');
+  const file = path.join(DATA_DIR, 'anchors.jsonl');
+  if (!fs.existsSync(file)) return null;
+  const cutoff = Date.now() / 1000 - windowHours * 3600;
+  const costs = [];
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    let r; try { r = JSON.parse(line); } catch { continue; }
+    if (!(r.blockTime > cutoff) || !(r.lamports > 0)) continue;
+    costs.push(r.lamports);
+  }
+  if (!costs.length) return null;
+  costs.sort((a, b) => a - b);
+  return {
+    lamports: costs[Math.floor(costs.length / 2)],
+    perHour: costs.length / windowHours,
+    n: costs.length,
+  };
+}
+
 async function checkRpcAndBalance(anchorPub) {
   const url = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
   let slot;
@@ -268,11 +298,31 @@ async function checkRpcAndBalance(anchorPub) {
     const r = await postRpc(url, { jsonrpc: '2.0', id: 1, method: 'getBalance', params: [anchorPub] });
     const lamports = r.result && r.result.value;
     const sol = (lamports || 0) / 1e9;
-    // One anchor costs ~0.000006 SOL. Under 0.001 is roughly 150 anchors of runway, which
-    // is days, not months — worth saying out loud before it fails at 3am.
-    if (sol >= 0.001) report('PASS', 'anchor balance', `${sol.toFixed(6)} SOL`);
-    else report('WARN', 'anchor balance', `${sol.toFixed(6)} SOL — low, anchoring stops when it hits zero`,
-      `send SOL to ${anchorPub}   # ~0.000006 SOL per anchor`);
+    // Runway is measured, not assumed. This used to hardcode "~0.000006 SOL per anchor" —
+    // roughly the 5000-lamport base fee, written before lib/anchor.js started paying a
+    // priority fee. Observed cost is 17000 lamports, so the constant understated the burn
+    // by 2.8x and the operator-facing fix line quoted it. A balance of 0.000891 SOL read as
+    // ~150 anchors of runway when the truth was 52 — and the threshold below (0.001) was
+    // picked against the wrong constant too, so a genuinely urgent balance reported as a
+    // soft WARN. Derive both numbers from what actually happened instead.
+    const burn = observedAnchorBurn();
+    if (!burn) {
+      // No ledger to measure from. Say that rather than substituting a guess.
+      if (sol >= 0.001) report('PASS', 'anchor balance', `${sol.toFixed(6)} SOL`);
+      else report('WARN', 'anchor balance', `${sol.toFixed(6)} SOL — low, and no anchor history to size the runway from`,
+        `send SOL to ${anchorPub}`);
+      return;
+    }
+    const left = Math.floor(lamports / burn.lamports);
+    const hours = burn.perHour > 0 ? left / burn.perHour : Infinity;
+    const runway = hours === Infinity ? 'no recent anchors, runway unbounded'
+      : `~${left} anchors ≈ ${hours < 48 ? hours.toFixed(1) + 'h' : (hours / 24).toFixed(1) + 'd'} at ${burn.perHour.toFixed(1)}/h`;
+    const detail = `${sol.toFixed(6)} SOL — ${runway}`;
+    const fix = `send SOL to ${anchorPub}   # ${(burn.lamports / 1e9).toFixed(8)} SOL per anchor, measured over ${burn.n} anchors in 24h`;
+    // Under a day of runway is not a warning, it is a deadline.
+    if (hours < 24) report('FAIL', 'anchor balance', detail, fix);
+    else if (hours < 24 * 7) report('WARN', 'anchor balance', detail, fix);
+    else report('PASS', 'anchor balance', detail);
   } catch (e) {
     report('WARN', 'anchor balance', `could not read: ${e.message}`, 'retry, or use a private RPC');
   }
