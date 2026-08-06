@@ -235,6 +235,7 @@ details.note .body b{color:var(--ink)}
     <a class="scard" id="scard" href="#">
       <div class="swho"><b id="s-caller"></b> <span id="s-kind"></span></div>
       <div class="swhat" id="s-what"></div>
+      <div class="lookedup" id="s-lookedup" hidden></div>
       <div class="smeta" id="s-meta"></div>
       <div class="sgo">open the receipt &rarr;</div>
     </a>
@@ -496,8 +497,29 @@ function renderSpecimen(calls){
   document.getElementById('s-caller').textContent = c.signed
     ? c.caller : c.caller.replace(/^unsigned:/, '');
   document.getElementById('s-kind').textContent = 'called it' + (c.signed ? ', and signed it' : '');
+  // The headline reads as the QUESTION, not the id. This card is the first thing a human
+  // sees, and it was rendering `polymarket:0x5dc212b712dcf5…` as its loudest line — an id
+  // that tells a first-time reader nothing at all. The rows below the fold already resolved
+  // the venue's own words; the specimen simply never got the same treatment.
+  //
+  // But the venue title is NOT signed and the venue can edit it, and this card's own second
+  // line says "and signed it" — so promoting unsigned text into the headline without saying
+  // so would be the one misrepresentation this whole page exists to prevent. The signed id
+  // stays visible, dimmer, labelled, exactly as it is on the rows.
   document.getElementById('s-what').textContent =
-    humanMarket(c.market) + (sideWord ? ' — ' + sideWord : '');
+    (c.market_title || humanMarket(c.market)) + (sideWord ? ' — ' + sideWord : '');
+  var lu = document.getElementById('s-lookedup');
+  if (lu){
+    if (c.market_title){
+      lu.textContent = 'question looked up from the venue'
+        + (c.market_title_at ? ' on ' + String(c.market_title_at).slice(0, 10) : '')
+        + ' — not signed. signed id: ' + (c.market_raw || c.market);
+      lu.hidden = false;
+    } else {
+      lu.textContent = '';
+      lu.hidden = true;
+    }
+  }
   document.getElementById('s-meta').textContent =
     'stamped on Solana at slot ' + c.slot + ' · ' + ago(c.at) + ' · receipt #' + c.seq;
   document.getElementById('scard').href = '/r/' + c.seq;

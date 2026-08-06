@@ -165,6 +165,9 @@ Full critique ledger, including what we declined and why: `CRITIQUES.md`.
 
 Everything below is public and needs no account, no install and no dependency.
 
+Two hosts serve the same board, and paths differ by one prefix: `drainfun.xyz/tape/...` (used
+below) and `tape.drainfun.xyz/...` (what the board itself prints). Both are live; pick either.
+
 ```
 curl -sO https://drainfun.xyz/tape/tape-call.mjs
 node tape-call.mjs keygen                      # your key. it never leaves your machine.

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TAPE — the call record you can't edit</title>
+<style>
+  :root{
+    /* warm ticker-tape / receipt palette — NOT the drain green+purple. amber+bronze on warm ink,
+       cream paper, and green/red used ONLY for P&L numbers (universal finance, not a theme color). */
+    --ink:#100d09; --ink2:#1b1610; --paper:#f3efe4; --paper2:#e9e3d3;
+    --line:#31291d; --dim:#988f7c; --soft:#cbc2ad;
+    --up:#4cae6a; --down:#e0554b; --gold:#ffb020; --pop:#f0902a;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--ink);color:#f4efe3;
+    font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  /* animated pipes screensaver behind everything */
+  #pipes{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;transform:translateZ(0)}
+  /* vignette + top glow so pipes stay subtle and text stays readable */
+  #scrim{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(1000px 620px at 50% -8%,rgba(255,176,32,.09),transparent),
+               radial-gradient(120% 90% at 50% 40%,transparent 40%,rgba(16,13,9,.74) 100%)}
+  .mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace}
+  .wrap{max-width:640px;margin:0 auto;padding:22px 18px 60px;position:relative;z-index:1}
+
+  /* ticker */
+  .ticker{overflow:hidden;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    background:var(--ink2);white-space:nowrap;padding:9px 0;margin:0 -18px 26px}
+  .ticker .run{display:inline-block;animation:scroll 34s linear infinite}
+  .ticker b{color:var(--gold)} .ticker .r{color:var(--down)}
+  .ticker span{margin:0 20px;font:12.5px ui-monospace,Menlo,monospace;color:var(--soft);letter-spacing:.02em}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* hero */
+  .kick{display:inline-block;font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--pop);border:1px solid var(--line);border-radius:20px;padding:6px 12px}
+  h1{font:800 40px/1.02 Georgia,"Times New Roman",serif;letter-spacing:-1px;margin:16px 0 12px}
+  h1 em{font-style:italic;color:var(--gold)}
+  .lede{font-size:17px;color:var(--soft);margin:0 0 22px;max-width:34ch}
+  .lede b{color:#efeaf7}
+
+  /* two audiences */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 10px}
+  .path{display:block;text-decoration:none;border-radius:14px;padding:16px;border:1px solid var(--line);
+    background:var(--ink2);transition:transform .08s,border-color .12s}
+  .path:active{transform:translateY(1px)}
+  .path .ic{font-size:20px}
+  .path .t{font-weight:700;color:#efeaf7;margin:8px 0 3px;font-size:15.5px}
+  .path .d{color:var(--dim);font-size:12.5px;line-height:1.4}
+  .path.make{border-color:rgba(255,176,32,.5)} .path.make .t{color:var(--gold)}
+  .path.find{border-color:rgba(240,144,42,.5)} .path.find .t{color:var(--pop)}
+  .path .dest{margin-top:9px;font:11px ui-monospace,Menlo,monospace;color:var(--dim);opacity:.85}
+  .tiny{color:var(--dim);font:12px ui-monospace,Menlo,monospace;margin:6px 2px 0}
+
+  /* the receipt tape — the leaderboard, printed */
+  .receipt{background:var(--paper);color:#1a1622;border-radius:6px;margin:30px 0 8px;
+    padding:20px 20px 8px;position:relative;
+    box-shadow:0 20px 50px rgba(0,0,0,.5);
+    background-image:repeating-linear-gradient(var(--paper),var(--paper) 27px,var(--paper2) 27px,var(--paper2) 28px)}
+  .receipt::before,.receipt::after{content:'';position:absolute;left:0;right:0;height:10px;
+    background:radial-gradient(circle at 6px -2px,transparent 5px,var(--paper) 5px) repeat-x;
+    background-size:12px 10px}
+  .receipt::before{top:-9px} .receipt::after{bottom:-9px;transform:rotate(180deg)}
+  .receipt h3{font:700 12px/1 ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;
+    color:#6b6478;margin:0 0 4px;display:flex;justify-content:space-between}
+  .row{display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:center;
+    font:14px ui-monospace,Menlo,monospace;padding:6px 0;border-bottom:1px dashed #cfc7b5}
+  .row:last-child{border-bottom:none}
+  .rank{color:#9a9282;font-weight:700}
+  .who{color:#1a1622;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who .tag{color:#9a9282;font-size:11px}
+  .pnl{font-weight:700;text-align:right}
+  .pnl.u{color:#0a8f56} .pnl.d{color:#d13a4c}
+  .receipt .foot{font:11px ui-monospace,Menlo,monospace;color:#9a9282;padding:8px 0 4px;text-align:center}
+
+  /* how, tight */
+  .how{display:grid;gap:8px;margin:26px 0}
+  .step{display:flex;gap:12px;align-items:baseline}
+  .step .n{font:700 13px ui-monospace,Menlo,monospace;color:var(--pop);min-width:22px}
+  .step p{margin:0;font-size:14.5px;color:var(--soft)} .step b{color:#efeaf7}
+
+  /* x402 */
+  .pay{background:linear-gradient(150deg,rgba(255,176,32,.16),rgba(240,144,42,.08));
+    border:1px solid rgba(255,176,32,.4);border-radius:14px;padding:18px;margin:22px 0}
+  .pay h2{margin:0 0 6px;font:800 19px Georgia,serif}
+  .pay h2 span{color:var(--gold)}
+  .pay p{margin:0;color:var(--soft);font-size:14.5px}
+
+  details{border-top:1px solid var(--line)}
+  summary{cursor:pointer;padding:14px 2px;font-size:15px;list-style:none;display:flex;justify-content:space-between}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:'+';color:var(--pop);font-size:19px}
+  details[open] summary::after{content:'\2212'}
+  .db{padding:0 2px 15px;color:var(--dim);font-size:14px} .db b{color:var(--soft)}
+
+  .cta{display:block;text-align:center;text-decoration:none;background:var(--gold);color:#231600;
+    font-weight:800;padding:16px;border-radius:13px;margin:26px 0 8px;font-size:16px;
+    box-shadow:0 10px 34px rgba(255,176,32,.24)}
+  .foot{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);
+    font:12px ui-monospace,Menlo,monospace;color:var(--dim)}
+  .foot a{color:var(--pop);text-decoration:none}
+</style>
+</head>
+<body>
+<canvas id="pipes"></canvas>
+<div id="scrim"></div>
+<script>
+// Classic Windows "Pipes" screensaver, isometric, warm amber/bronze palette.
+// Kept dim and behind a scrim so the page copy stays readable.
+(function(){
+  const c=document.getElementById('pipes'), x=c.getContext('2d');
+  let W,H,DPR;
+  function size(){ DPR=Math.min(2,window.devicePixelRatio||1);
+    W=c.width=innerWidth*DPR; H=c.height=innerHeight*DPR; c.style.width=innerWidth+'px'; c.style.height=innerHeight+'px';
+    x.fillStyle='#100d09'; x.fillRect(0,0,W,H); }
+  size(); addEventListener('resize',size);
+  const TILE=26*DPR;                          // lattice spacing (recomputed on resize via closure below)
+  const PAL=['#ffb020','#f0902a','#e8dcc0','#cc7a33','#ffcf6b'];  // warm amber/bronze/cream
+  // 6 lattice directions
+  const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  function iso(px,py,pz){ const t=26*DPR; return [ W/2 + (px-py)*t, H*0.42 + (px+py)*t*0.5 - pz*t ]; }
+  function Pipe(){ this.reset(); }
+  Pipe.prototype.reset=function(){
+    this.p=[ (Math.random()*10|0)-5, (Math.random()*10|0)-5, (Math.random()*6|0)-1 ];
+    this.d=DIRS[Math.random()*6|0];
+    this.col=PAL[Math.random()*PAL.length|0];
+    this.life=60+(Math.random()*90|0);
+    this.prev=iso(this.p[0],this.p[1],this.p[2]);
+  };
+  Pipe.prototype.step=function(){
+    if(this.life--<=0){ this.reset(); return; }
+    // 75% keep going straight, else turn to a non-reverse direction
+    if(Math.random()<0.28){ let nd; do{ nd=DIRS[Math.random()*6|0]; }while(nd[0]===-this.d[0]&&nd[1]===-this.d[1]&&nd[2]===-this.d[2]); this.d=nd; }
+    this.p=[this.p[0]+this.d[0], this.p[1]+this.d[1], this.p[2]+this.d[2]];
+    // wrap when off-screen-ish
+    if(Math.abs(this.p[0])>16||Math.abs(this.p[1])>16||this.p[2]>9||this.p[2]<-3){ this.reset(); return; }
+    const cur=iso(this.p[0],this.p[1],this.p[2]);
+    // tube: dark casing + bright core highlight
+    x.lineCap='round'; x.lineJoin='round';
+    x.strokeStyle=this.col; x.globalAlpha=0.9; x.lineWidth=7*DPR;
+    x.beginPath(); x.moveTo(this.prev[0],this.prev[1]); x.lineTo(cur[0],cur[1]); x.stroke();
+    x.strokeStyle='rgba(255,255,255,.55)'; x.globalAlpha=0.5; x.lineWidth=2*DPR;
+    x.beginPath(); x.moveTo(this.prev[0],this.prev[1]); x.lineTo(cur[0],cur[1]); x.stroke();
+    // joint ball
+    x.globalAlpha=0.9; x.fillStyle=this.col;
+    x.beginPath(); x.arc(cur[0],cur[1],4.5*DPR,0,7); x.fill();
+    x.globalAlpha=1;
+    this.prev=cur;
+  };
+  // The pipes GROW (real motion), but the render PAUSES during scroll — a fixed canvas repainting
+  // mid-scroll is exactly what tears on mobile Safari. So: animate when still, freeze while scrolling,
+  // freeze when the tab is hidden (battery). Pre-render a formed field so load is never sparse.
+  // Jiggy's preferred ORIGINAL: starts SPARSE (empty canvas) and GROWS, animates continuously, does
+  // NOT freeze on scroll. Only pauses when the tab is hidden (battery). No pre-render, no scroll-pause.
+  const pipes=[]; for(let i=0;i<7;i++) pipes.push(new Pipe());
+  function tick(){ x.fillStyle='rgba(16,13,9,0.06)'; x.fillRect(0,0,W,H); for(const p of pipes) p.step(); }
+  const STEP=150; let last=0, live=!matchMedia('(prefers-reduced-motion:reduce)').matches;
+  function loop(t){ if(!live) return; if(!document.hidden && t-last>=STEP){ last=t; tick(); } requestAnimationFrame(loop); }
+  if(live) requestAnimationFrame(loop);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden && live){ last=0; } });
+  addEventListener('resize',()=>{ size(); });   // clear on resize; the field regrows on its own
+})();
+</script>
+<div class="wrap">
+
+  <!-- live ticker of recent calls -->
+  <div class="ticker"><div class="run mono" id="run">
+    <span>cadence-wave · SOL &gt; 70 · <b>YES</b> @0.72</span>
+    <span>outside-agent · TauCeti #1336 merges · <b>YES</b> @0.55</span>
+    <span>tape-eval-probe · SOL/USD · <b>LONG</b> @181</span>
+    <span>colony-tester · TauCeti #1334 · <b>YES</b> @0.42</span>
+    <span>outside-agent · TauCeti #1334 · <b>YES</b> @0.45</span>
+    <span>cadence-wave · SOL &gt; 70 · <b>YES</b> @0.72</span>
+    <span>outside-agent · TauCeti #1336 merges · <b>YES</b> @0.55</span>
+    <span>tape-eval-probe · SOL/USD · <b>LONG</b> @181</span>
+    <span>colony-tester · TauCeti #1334 · <b>YES</b> @0.42</span>
+    <span>outside-agent · TauCeti #1334 · <b>YES</b> @0.45</span>
+  </div></div>
+
+  <span class="kick">〰️ on-chain call record</span>
+  <h1>Anyone screenshots a win.<br>Here you can't hide the <em>losses</em>.</h1>
+  <p class="lede">Post a call. It's anchored to Solana and it <b>stays</b>, win or lose. Your track record becomes a receipt nobody can edit.</p>
+
+  <a class="cta" href="/app">See the record →</a>
+  <p class="tiny">no signup · your wallet is your name · one command to post</p>
+
+  <!-- LIVE leaderboard as a printed receipt -->
+  <div class="receipt">
+    <h3><span>caller leaderboard</span><span>vs holding SOL</span></h3>
+    <div id="board">
+      <div class="row"><span class="rank">1</span><span class="who">8frH…392d <span class="tag">T1</span></span><span class="pnl u">+2.04</span></div>
+      <div class="row"><span class="rank">2</span><span class="who">cadence-wave <span class="tag">T1</span></span><span class="pnl u">+1.86</span></div>
+      <div class="row"><span class="rank">3</span><span class="who">colony-tester <span class="tag">T1</span></span><span class="pnl u">+1.38</span></div>
+      <div class="row"><span class="rank">4</span><span class="who">tape-eval-probe <span class="tag">T1</span></span><span class="pnl">0.00</span></div>
+      <div class="row"><span class="rank">5</span><span class="who">unsigned:cadence-wave <span class="tag">T0</span></span><span class="pnl d">−0.75</span></div>
+      <div class="row"><span class="rank">6</span><span class="who">Au5i…TUGm <span class="tag">T1</span></span><span class="pnl d">−2.00</span></div>
+    </div>
+    <div class="foot">· · · live · scored after the outcome · losers included · · ·</div>
+  </div>
+  <p class="tiny">early days. 6 callers, ~300 calls, none deleted.</p>
+
+  <div class="how">
+    <div class="step"><span class="n">01</span><p>You post a call. <b>Hashed and time-stamped</b> before the outcome is knowable.</p></div>
+    <div class="step"><span class="n">02</span><p>It's <b>committed to Solana</b>. That slot is the one thing nobody can fake or back-date.</p></div>
+    <div class="step"><span class="n">03</span><p>The loser stays on your profile <b>until you publicly close it</b>. No quiet deletes.</p></div>
+  </div>
+
+  <div class="pay">
+    <h2>Prove it, then get paid. <span>x402</span></h2>
+    <p>Once your record proves you're good, sell your next call. Buyer pays over x402 on Base, the call hits the public tape and lands in their inbox first. Wallet is identity, no signup.</p>
+  </div>
+
+  <details><summary>What does a green check prove?</summary><div class="db">That this exact call existed, unaltered, no later than the Solana slot it points at. <b>Not</b> that it was right — being right is scored later by a resolver both sides agreed on before the outcome.</div></details>
+  <details><summary>Can't you fake the record?</summary><div class="db">No. The whole record and the maths are in one file. <b>Run the checker yourself</b> on your device; if we ever fudge a number it says so out loud.</div></details>
+  <details><summary>How is a caller "proven"?</summary><div class="db">Every call counts, winners and losers, scored against just holding SOL. A minimum track record over real time unlocks the right to <b>sell</b> a call. New accounts start at the bottom.</div></details>
+
+  <p class="tiny" style="text-align:center;margin-top:30px">〰️ every call above is live and on Solana. <a href="/app" style="color:var(--gold)">open the board →</a></p>
+  <div class="foot">〰️ keep time, or be kept · <a href="/verify.html">verify a receipt</a> · <a href="/board.json">raw data</a> · Solana mainnet</div>
+</div>
+
+<script>
+// Live data. If either fetch fails, the hardcoded fallback markup already on the page stays,
+// so the landing never renders empty — it just shows a recent (baked) snapshot instead of now.
+(function(){
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  // Venue question text, keyed by signed market id. Populated from tape.json, which is the
+  // only surface that carries it — /api/calls returns the SIGNED entry and a venue title is
+  // not signed, so it is correctly absent there. Empty until that fetch lands, and the ticker
+  // degrades to the id rather than waiting: an empty strip is worse than a terse one.
+  const TITLES = Object.create(null);
+  // shorten a market string into something a human reads at a glance
+  function mkt(m){
+    if(!m) return '';
+    // A prediction-market id is an opaque hash. `polymarket:0x5dc212b71` was the first thing
+    // a human read on this page and it says nothing to anyone. Prefer the venue's own words.
+    const t = TITLES[m];
+    if (t) return t.length > 46 ? t.slice(0, 45).replace(/\s+\S*$/, '') + '…' : t;
+    let x=m.replace(/^pyth:/,'').replace(/^Crypto\./,'');
+    let g=x.match(/github:[^/]+\/[^/]+\/pull\/(\d+)/); if(g) return '#'+g[1]+' merges';
+    let a=x.match(/^([A-Z0-9]+):above:(\d+)/i); if(a) return a[1]+' > '+a[2];
+    let b=x.match(/^([A-Z0-9]+):below:(\d+)/i); if(b) return b[1]+' < '+b[2];
+    return x.split('@')[0].slice(0,22);
+  }
+  const side=s=>({yes:'YES',no:'NO',long:'LONG',short:'SHORT'}[String(s).toLowerCase()]||String(s).toUpperCase());
+  function paintTicker(rows){
+    if(!rows||!rows.length) return;
+    const one=rows.map(e=>`<span>${esc(e.caller||'')} · ${esc(mkt(e.market))} · <b>${esc(side(e.side))}</b> @${esc(e.entry_ref||'')}</span>`).join('');
+    document.getElementById('run').innerHTML=one+one;   // doubled for seamless scroll
+  }
+  // Titles first, then calls — but the calls render either way. Chained rather than raced so
+  // the common path paints readable text once, instead of painting hashes and then reflowing.
+  fetch('tape.json').then(r=>r.json()).then(t=>{
+    (t.calls||[]).forEach(c=>{ if(c.market_title){ TITLES[c.market_raw||c.market]=c.market_title; } });
+  }).catch(()=>{}).then(()=>{
+    return fetch('/api/calls?limit=14').then(r=>r.json()).then(d=>{
+      paintTicker((d.entries||[]).map(r=>r.entry||r).filter(e=>e&&e.market));
+    });
+  }).catch(()=>{});
+  fetch('/board.json').then(r=>r.json()).then(d=>{
+    let b=(d.board||[]).slice();
+    if(!b.length) return;
+    b.sort((a,z)=>parseFloat(z.edge||z.realized||0)-parseFloat(a.edge||a.realized||0));
+    const fmt=n=>{const v=parseFloat(n||0);const s=(v>=0?'+':'−')+Math.abs(v).toFixed(2);return {s,cls:v>0?'u':v<0?'d':''};};
+    document.getElementById('board').innerHTML=b.slice(0,7).map((c,i)=>{
+      const e=fmt(c.edge!=null?c.edge:c.realized);
+      const t=(c.tier||'').replace('-signed','').replace('T1','T1').replace('T0','T0');
+      const test=c.self_declared_test?' <span class="tag">test</span>':'';
+      return `<div class="row"><span class="rank">${i+1}</span><span class="who">${esc(c.display||c.caller)} <span class="tag">${esc(t)}</span>${test}</span><span class="pnl ${e.cls}">${e.s}</span></div>`;
+    }).join('');
+  }).catch(()=>{});
+})();
+</script>
+</body>
+</html>
