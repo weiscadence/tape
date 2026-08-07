@@ -95,6 +95,39 @@ function refreshBoard() {
     });
 }
 
+// ---- market categorisation (what KIND of caller someone is) ------------------------------
+let TITLES = {};
+function loadTitles() { try { TITLES = JSON.parse(fs.readFileSync(path.join(DATA, 'market-titles.json'), 'utf8')); } catch { /* keep */ } }
+loadTitles(); setInterval(loadTitles, 5 * 60 * 1000).unref();
+function titleOf(m) {
+  if (TITLES[m] && TITLES[m].title) return TITLES[m].title;
+  const c = marketsCache.data.find((x) => ('polymarket:' + x.id) === m);
+  if (c) return c.q;
+  if (m.startsWith('github:')) return m.replace('github:', '').split(':')[0];
+  return m.replace(/^(pyth|demo|delphi|polymarket):/, '').slice(0, 40);
+}
+function categorize(m) {
+  if (m.startsWith('github:')) return 'Dev';
+  if (/^pyth:|^demo:.*(sol|btc|eth)/i.test(m)) return 'Crypto';
+  const t = titleOf(m).toLowerCase();
+  const has = (...ws) => ws.some((w) => t.includes(w));
+  if (has('marlin', 'brave', 'red sox', 'white sox', 'yankee', 'nba', 'nfl', 'soccer', 'laliga', 'barcelona', 'champions league', 'tennis', 'national bank open', 'norrie', 'musetti', 'sabalenka', 'golf', 'wyndham', 'valorant', 'vct', ' vs ', 'win the')) return 'Sports';
+  if (has('iran', 'blockade', 'ceasefire', 'invade', 'election', 'president', 'prime minister', 'vance', 'nominee', 'clarity act', 'signed into law', 'hormuz')) return 'Politics';
+  if (has('fed', 'interest rate', 'rate', 'inflation', 'cpi', 'recession')) return 'Macro';
+  if (has('oil', 'wti', 'crude', 'gold', 'gas')) return 'Commodities';
+  if (has('sol', 'btc', 'eth', 'solana', 'bitcoin', 'ethereum', 'price')) return 'Crypto';
+  if (has('temperature', 'weather', 'rain')) return 'Weather';
+  return 'Other';
+}
+function specializationOf(calls) {
+  const cats = {};
+  for (const c of calls) { c.category = categorize(c.market); c.label = titleOf(c.market); cats[c.category] = (cats[c.category] || 0) + 1; }
+  const list = Object.entries(cats).map(([cat, n]) => ({ cat, n })).sort((a, b) => b.n - a.n);
+  const top = list[0];
+  const spec = !list.length ? null : (top.n / calls.length >= 0.6 ? `${top.cat} caller` : `spread · ${list.length} lanes`);
+  return { categories: list, specialization: spec };
+}
+
 // The signed-in user's own calls, read straight from the chain so a just-posted OPEN call
 // shows immediately (the leaderboard cache lags 5 min and only counts settled calls). Open
 // bags are shown as open — the whole point is they don't disappear until they resolve.
@@ -113,7 +146,8 @@ function myCalls(handle) {
     const win = p.side === 'no' ? 1 - p.settle : p.settle;
     return { ...p, status: 'settled', won: win > p.entry, pnl: win - p.entry };
   }).reverse();
-  return { handle, calls, open: calls.filter((c) => c.status === 'open').length, settled: calls.filter((c) => c.status === 'settled').length };
+  const spec = specializationOf(calls);
+  return { handle, calls, open: calls.filter((c) => c.status === 'open').length, settled: calls.filter((c) => c.status === 'settled').length, categories: spec.categories, specialization: spec.specialization };
 }
 
 // A caller's chain-verifiable record, grouped by lane, for the profile popup.
@@ -127,10 +161,12 @@ function callerDetail(identity) {
     l.n += 1; l.pnl += pnl; if (pnl > 0) l.wins += 1;
     return { market: p.market, side: p.side, pnl, edge: Number(p.edge) || 0, won: pnl > 0, seq: p.seq };
   }).sort((a, b) => a.seq - b.seq);
+  const spec = specializationOf(calls);
   return {
     caller: meta.caller || (rows[0] && rows[0].caller) || identity,
     kind: meta.kind || 'agent', edge: meta.edge, wins: meta.wins, losses: meta.losses,
     settled: calls.length, lanes: Object.values(lanes), calls,
+    categories: spec.categories, specialization: spec.specialization,
   };
 }
 

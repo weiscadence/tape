@@ -156,6 +156,9 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 .pedge span{display:block;font-size:9px;color:var(--dim);font-weight:600;letter-spacing:.1em}
 .pedge.up{color:var(--green)}.pedge.down{color:var(--red)}.pedge.flat{color:var(--dim)}
 .pstat{color:var(--dim);font-size:12px;margin-top:8px}
+.pspec{margin-top:10px;font-size:14px;font-weight:800;color:var(--amber);letter-spacing:.02em}
+.cats{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.cat{font-size:10px;letter-spacing:.05em;color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
 .plane{font-size:9.5px;letter-spacing:.16em;color:var(--dim);margin:18px 0 8px}
 .bars{display:flex;gap:8px;align-items:flex-end;overflow-x:auto;padding-bottom:4px}
 .bar{flex:0 0 auto;width:44px;text-align:center}
@@ -347,16 +350,22 @@ async function openCaller(identity){
   let html=`<div class="phead"><div><b>${esc(d.caller)}</b><span class="bg ${d.kind==='verified'?'verified':d.kind==='human'?'human':'ai'}">${kindTag}</span></div>
     <div class="pedge ${e>0.01?'up':e<-0.01?'down':'flat'}">${es}<span>vs SOL</span></div></div>
     <div class="pstat">${d.wins}W / ${d.losses}L · ${d.settled} settled · chain-verified</div>`;
+  // what KIND of caller — specialization + per-category tally
+  if(d.specialization){
+    html+=`<div class="pspec">◆ ${esc(d.specialization)}</div><div class="cats">`;
+    for(const c of (d.categories||[])) html+=`<span class="cat">${esc(c.cat)} ·${c.n}</span>`;
+    html+='</div>';
+  }
   if(!d.calls.length){ html+='<p class="hint" style="margin-top:12px">No settled calls yet — nothing the chain can be sure about. Open calls don\'t show here until they resolve.</p>'; }
   else {
     const max=Math.max(1,...d.calls.map(c=>Math.abs(c.pnl)));
     html+='<div class="plane">SETTLED CALLS · beat-the-price per call</div><div class="bars">';
     for(const c of d.calls){
       const h=Math.round(6+Math.abs(c.pnl)/max*70);
-      const label=c.market.split(':').slice(0,2).join(':').replace(/^(polymarket|github|pyth|delphi):/,'');
-      html+=`<div class="bar"><div class="bwrap"><div class="b ${c.won?'win':'loss'}" style="height:${h}px" title="${esc(c.market)} · ${c.side} · pnl ${c.pnl.toFixed(2)}"></div></div>
+      const label=(c.label||c.market).replace(/^(polymarket|github|pyth|delphi):/,'');
+      html+=`<div class="bar"><div class="bwrap"><div class="b ${c.won?'win':'loss'}" style="height:${h}px" title="${esc(c.label||c.market)} · ${c.category||''} · ${c.side} · pnl ${c.pnl.toFixed(2)}"></div></div>
         <div class="bv ${c.won?'up':'down'}">${c.pnl>=0?'+':''}${c.pnl.toFixed(1)}</div>
-        <div class="bl">${esc(label).slice(0,10)}</div></div>`;
+        <div class="bl">${esc(c.category||label).slice(0,10)}</div></div>`;
     }
     html+='</div>';
     if(d.lanes.length>1){ html+='<div class="plane">BY LANE</div>'; for(const L of d.lanes) html+=`<div class="lrow"><span>${esc(L.lane)}</span><span>${L.wins}/${L.n} · ${(L.pnl>=0?'+':'')+L.pnl.toFixed(2)}</span></div>`; }
