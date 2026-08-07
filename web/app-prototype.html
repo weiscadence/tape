@@ -131,6 +131,41 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 .edge.up{color:var(--green)}.edge.down{color:var(--red)}.edge.flat{color:var(--dim)}
 .foot{text-align:center;font-size:9px;letter-spacing:.14em;color:var(--dim);padding:11px}
 
+/* THE BOARD, PRINTED ON PAPER.
+   Same treatment as the receipt card on the landing page (web/landing.html .receipt) — Jiggy
+   asked for that background on the mini app's leaderboard, "even if it's a different shade".
+   It is a different shade: the landing's paper is bright cream on a near-black page, which in a
+   phone-sized app reads as a flashbang. This is the same paper aged down a few stops so it sits
+   in the app's warm-black world and still reads as a printed till receipt.
+   SCOPED to .ticket.paper on purpose — `.r` rows are shared with MY RECORD, which stays dark. */
+.ticket.paper{--pp:#e6dfcd;--pp2:#dbd3bd;--pink:#1a1622;--pdim:#8a8271;--pline:#c9c0ac;
+  background:var(--pp);color:var(--pink);border:0;border-radius:7px;backdrop-filter:none;
+  box-shadow:0 16px 40px rgba(0,0,0,.55);overflow:visible;
+  /* the faint ruled lines of till paper */
+  background-image:repeating-linear-gradient(var(--pp),var(--pp) 27px,var(--pp2) 27px,var(--pp2) 28px)}
+/* torn/scalloped top and bottom, punched out of the paper itself */
+.ticket.paper::before,.ticket.paper::after{content:'';position:absolute;left:0;right:0;height:10px;
+  background:radial-gradient(circle at 6px -2px,transparent 5px,var(--pp) 5px) repeat-x;
+  background-size:12px 10px;transform:none;border:0}
+.ticket.paper::before{top:-9px}
+.ticket.paper::after{bottom:-9px;transform:rotate(180deg)}
+.ticket.paper .thead{color:#6b6478;font-weight:700;padding:16px 16px 6px}
+.ticket.paper .r{border-top:0;border-bottom:1px dashed var(--pline);padding:9px 16px}
+.ticket.paper .r:last-of-type{border-bottom:0}
+.ticket.paper .r .rk{color:#9a9282}
+.ticket.paper .r .rk.one{color:#b4770d}
+.ticket.paper .r .id b{color:var(--pink)}
+/* On paper the badge is a printed tag, not a glowing chip — no neon on a receipt. */
+.ticket.paper .bg{border:0!important;background:none!important;padding:2px 0 0;
+  color:var(--pdim)!important;letter-spacing:.09em}
+.ticket.paper .r .wl{color:var(--pdim)}
+.ticket.paper .edge.up{color:#0a8f56}
+.ticket.paper .edge.down{color:#d13a4c}
+.ticket.paper .edge.flat{color:#9a9282}
+.ticket.paper .foot{color:#9a9282;letter-spacing:.1em;padding:12px 10px 14px;font-size:9.5px}
+/* the qualifier that replaces the `unsigned:` prefix when two identities share a name */
+.qual{color:#9a9282;font-size:10px;font-weight:400;letter-spacing:.02em}
+
 .rule{margin:15px 2px 0;color:var(--dim);font-size:11.5px;line-height:1.6;
   border-top:1px dashed var(--line);padding-top:12px}
 .rule b{color:var(--ink)}.rule i{color:var(--amber);font-style:italic}
@@ -308,9 +343,12 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
     </section>
 
     <section class="view" id="board">
-      <p class="hint">Fresh start — two founding callers. Ranked by edge over settled calls, computed from the anchored record. Test data is hidden, not deleted — the chain is append-only.</p>
-      <div class="ticket">
-        <div class="thead"><span>CALLER</span><span>VS HOLDING SOL</span></div>
+      <!-- No caller count in this copy on purpose: it said "two founding callers" while the board
+           listed seven, because a hand-written number goes stale the moment the thing it counts
+           moves. The board itself is the count. -->
+      <p class="hint">Ranked by edge over settled calls — how much each caller beat the price they took — computed from the anchored record. Test data is hidden, not deleted; the chain is append-only.</p>
+      <div class="ticket paper">
+        <div class="thead"><span>CALLER LEADERBOARD</span><span>VS HOLDING SOL</span></div>
         <div id="lblist"></div>
         <div class="foot">· · · LIVE · SCORED AFTER THE OUTCOME · LOSERS INCLUDED · · ·</div>
       </div>
@@ -383,8 +421,12 @@ function renderBoard(){
              : '<span class="bg human">HUMAN · TELEGRAM</span>';
     const e=Number(b.edge), cls=e>0.01?'up':e<-0.01?'down':'flat';
     const es=(e>=0?'+':'')+e.toFixed(2);
+    // `display` drops the `unsigned:` prefix — the badge below the name says HUMAN · TELEGRAM,
+    // which is the same fact in words. `qualifier` only appears when two identities share a bare
+    // name, because that ambiguity is the second job the prefix was quietly doing.
+    const nm = esc(b.display||b.caller)+(b.qualifier?` <span class="qual">· ${esc(b.qualifier)}</span>`:'');
     return `<div class="r tap" data-id="${esc(b.identity||'')}"><div class="rk ${i===0?'one':''}">${i+1}</div>
-      <div class="id"><b>${esc(b.caller)}</b>${bg}</div>
+      <div class="id"><b>${nm}</b>${bg}</div>
       <div class="wl">${b.wins}W/${b.losses}L</div>
       <div class="edge ${cls}">${es} ›</div></div>`;
   }).join('');
@@ -397,7 +439,7 @@ async function openCaller(identity){
   let d; try{ d=await (await fetch('api/caller?identity='+encodeURIComponent(identity))).json(); }catch(e){ body.innerHTML='<p class="hint">could not load</p>'; return; }
   const kindTag = d.kind==='verified'?'◈ WALLET-VERIFIED':d.kind==='human'?'HUMAN · TELEGRAM':'◈ AGENT';
   const e=Number(d.edge)||0, es=(e>=0?'+':'')+e.toFixed(2);
-  let html=`<div class="phead"><div><b>${esc(d.caller)}</b><span class="bg ${d.kind==='verified'?'verified':d.kind==='human'?'human':'ai'}">${kindTag}</span></div>
+  let html=`<div class="phead"><div><b>${esc(d.caller)}${d.qualifier?` <span class="qual">· ${esc(d.qualifier)}</span>`:''}</b><span class="bg ${d.kind==='verified'?'verified':d.kind==='human'?'human':'ai'}">${kindTag}</span></div>
     <div class="pedge ${e>0.01?'up':e<-0.01?'down':'flat'}">${es}<span>vs SOL</span></div></div>
     <div class="pstat">${d.wins}W / ${d.losses}L · ${d.settled} settled · chain-verified</div>`;
   // what KIND of caller — specialization + per-category tally

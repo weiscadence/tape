@@ -70,6 +70,42 @@ function refreshMarkets() {
   }).on('error', () => { /* keep the last good cache */ });
 }
 
+// ---- display names -----------------------------------------------------------------------
+//
+// `unsigned:cadence-wave` is what the SCORE ENGINE calls that identity and it must never change:
+// the prefix is how a vouched-unsigned row is prevented from passing as wallet-verified, and
+// every artifact, receipt and API response keeps it. But on a leaderboard it is noise in front of
+// the only word a reader cares about — "messy", per Jiggy, 2026-08-07 — and the badge beside the
+// name (HUMAN · TELEGRAM vs ◈ WALLET-VERIFIED) already carries the same information in words a
+// person reads without decoding a prefix.
+//
+// So the prefix is stripped for DISPLAY only. The catch is that the prefix was also doing a second
+// job nobody wrote down: disambiguation. `cadence-wave` and `unsigned:cadence-wave` are different
+// identities that would both render as "cadence-wave" and sit at ranks 1 and 6 of the same board.
+// Dropping the prefix without replacing that would make the board quietly ambiguous, which is
+// worse than ugly. When a bare name is claimed by more than one identity, the collided rows carry
+// an explicit qualifier — never the bare name alone.
+function withDisplayNames(rows) {
+  const bare = (c) => String(c || '').replace(/^unsigned:/, '');
+  const seen = new Map();
+  for (const b of rows) {
+    const k = bare(b.caller);
+    if (!seen.has(k)) seen.set(k, new Set());
+    seen.get(k).add(b.identity);
+  }
+  return rows.map((b) => {
+    const name = bare(b.caller);
+    const contested = (seen.get(name) || new Set()).size > 1;
+    return {
+      ...b,
+      display: name,
+      // Only appears when it has to. A qualifier on every row would just be the prefix again.
+      qualifier: contested ? (b.caller.startsWith('unsigned:') ? 'via telegram' : 'signed key') : null,
+      unsigned: b.caller.startsWith('unsigned:'),
+    };
+  });
+}
+
 // ---- board cache (the real leaderboard artifact, recomputed on an interval) --------------
 let boardCache = { at: 0, data: [], positions: [] };
 function refreshBoard() {
@@ -82,11 +118,11 @@ function refreshBoard() {
         const art = JSON.parse(stdout);
         boardCache = {
           at: Date.now(),
-          data: (art.board || []).map((b) => ({
+          data: withDisplayNames((art.board || []).map((b) => ({
             caller: b.caller, identity: b.identity, edge: b.edge, wins: b.wins, losses: b.losses,
-            open: b.open, kind: b.caller.startsWith('unsigned:') ? 'human'
+            open: b.open, tier: b.tier, kind: b.caller.startsWith('unsigned:') ? 'human'
               : /…|\.\.\./.test(b.caller) ? 'verified' : 'agent',
-          })),
+          }))),
           // Keep the scored positions so a caller-profile can show a per-call, chain-verifiable
           // bar chart. Only SCORED rows travel — unresolved/unscored calls are not things "the
           // chain can be sure about" yet, which is exactly the honesty the product is about.
@@ -188,8 +224,11 @@ function callerDetail(identity) {
     && idOf(r.entry) === identity && !closedRefs.has(r.entry_hash))
     .map((r) => ({ market: r.entry.market, side: r.entry.side, size: Number(r.entry.size) || 1, entry: Number(r.entry.entry_ref), seq: r.seq }));
   const spec = specializationOf([...calls, ...open]);
+  const rawCaller = meta.caller || (rows[0] && rows[0].caller) || (open[0] && open[0].caller) || identity;
   return {
-    caller: meta.caller || (rows[0] && rows[0].caller) || (open[0] && open[0].caller) || identity,
+    // Same display rule as the board — a profile opened from a row must not rename its subject.
+    caller: meta.display || String(rawCaller).replace(/^unsigned:/, ''),
+    qualifier: meta.qualifier || null,
     kind: meta.kind || 'agent', edge: meta.edge, wins: meta.wins, losses: meta.losses,
     settled: calls.length, lanes: Object.values(lanes), calls, open,
     categories: spec.categories, specialization: spec.specialization,
