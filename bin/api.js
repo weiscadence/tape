@@ -46,6 +46,7 @@ const A = require('../lib/attest');
 const operator = require('../lib/operator');
 const marketBoard = require('../lib/market-board');
 const { TIERS } = require('../lib/tiers');
+const { laneOf } = require('../lib/lanes');
 
 // Overridable so the HTTP layer can be exercised against a throwaway chain. Without this
 // the only way to test a write route is to write to the real tape, and a test that dirties
@@ -861,10 +862,23 @@ function agentDoc() {
     // 502'd and the very first command a new caller ran came back `REJECTED (502): HTTP 502`.
     // A quickstart that does not work is worse than no quickstart: it fails in a way that
     // looks like the service is broken rather than like the example is.
+    // AND IT WAS WRONG AGAIN, differently, 2026-08-07. Step 3 posted `Crypto.SOL/USD`, a market
+    // id constructed by hand and absent from /api/markets — the exact act this same document
+    // warns against three separate times, because a constructed id can be ACCEPTED and then
+    // never scored, leaving a permanent row worth zero. The quickstart was the one place the
+    // service told a new caller to do the forbidden thing, and it read as authoritative
+    // precisely because it was the first thing they ran. Found by a no-context agent following
+    // the docs literally, which is what agents do and what humans quietly correct for.
+    // Step 3 now READS the board, so the list is still runnable verbatim and no longer teaches
+    // the habit the rest of the document spends three paragraphs trying to prevent.
     quickstart: [
       'curl -sO https://tape.drainfun.xyz/tape-call.mjs',
       'node tape-call.mjs keygen',
-      'node tape-call.mjs post --lane perp --market "Crypto.SOL/USD" --side yes --size 1 --odds 0.5 --note "first call"',
+      '# Read the board first. Never construct a market id: an invented one is either refused, '
+        + 'or accepted and never scoreable — a permanent row that counts zero forever.',
+      'MARKET=$(curl -s https://tape.drainfun.xyz/api/markets | node -e "let s=\'\';process.stdin.on(\'data\',d=>s+=d).on(\'end\',()=>{const m=JSON.parse(s).markets[0];if(!m){console.error(\'board empty right now — retry\');process.exit(1)}console.log(m.market)})")',
+      'LANE=$(curl -s https://tape.drainfun.xyz/api/markets | node -e "let s=\'\';process.stdin.on(\'data\',d=>s+=d).on(\'end\',()=>{const m=JSON.parse(s).markets[0];console.log(m?m.lane:\'\')})")',
+      'node tape-call.mjs post --lane "$LANE" --market "$MARKET" --side yes --size 1 --odds 0.5 --note "first call"',
       'node tape-call.mjs check-receipt tape-receipt-<seq>.json',
       'curl -sO https://tape.drainfun.xyz/tape-verify.mjs   # then check us against Solana, not against us',
     ],
@@ -1010,7 +1024,20 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname === '/markets') {
         const b = marketBoard.snapshot();
         const venue = url.searchParams.get('venue');
-        const rows = venue ? b.data.filter((m) => m.venue === venue) : b.data;
+        const raw = venue ? b.data.filter((m) => m.venue === venue) : b.data;
+        /**
+         * `lane` is REQUIRED on a post and was not published on any market row.
+         *
+         * Found by a no-context agent asked to use this service from the docs alone: it got as
+         * far as picking a market and could not determine the lane the write path demands,
+         * because no public surface carried it. The value was never unknown to us — laneOf()
+         * derives it deterministically from the market id — it was simply never handed over,
+         * which is the same "we have it, they don't" gap as an unserved tool.
+         *
+         * Derived at serve time rather than stored on the row so the two venue builders cannot
+         * drift apart on it, and so the answer here is the identical function the scorer uses.
+         */
+        const rows = raw.map((m) => ({ ...m, lane: laneOf(m.market).lane }));
         return json(res, 200, {
           ok: true,
           at: b.at,
