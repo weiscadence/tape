@@ -81,13 +81,24 @@ async function req(method, p, body) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   srv.stderr.on('data', (d) => { if (/Error|throw/.test(String(d))) process.stderr.write(d); });
-  const deadline = Date.now() + 15000;
-  for (;;) {
-    try { await fetch(BASE + '/health'); break; }
-    catch { if (Date.now() > deadline) { console.log('  FAIL server never came up'); process.exit(1); } await new Promise((r) => setTimeout(r, 200)); }
-  }
 
-  console.log('\nREACHABILITY — a stranger with only a keypair can take part');
+  // Everything below this point is one wire session against a single spawned server.
+  // ANY throw here — a fetch that hard-fails mid-sequence, not just an assertion inside
+  // t() — used to skip srv.kill() below and leak the child forever, still bound to
+  // PORT (3900 + pid%90). Leaked children accumulate across runs and can later collide
+  // with a fresh run whose pid happens to land on the same slot, which fails as an
+  // opaque EADDRINUSE/timeout with no assertion name — the exact "name lost to
+  // truncation" flake this file used to produce (owed #1191). try/finally guarantees
+  // the child and its tmp dir are reaped on every exit path, not just the happy one.
+  try {
+    const deadline = Date.now() + 15000;
+    for (;;) {
+      try { await fetch(BASE + '/health'); break; }
+      catch { if (Date.now() > deadline) { console.log('  FAIL server never came up'); fail++; break; } await new Promise((r) => setTimeout(r, 200)); }
+    }
+    if (fail) throw new Error('server never came up');
+
+    console.log('\nREACHABILITY — a stranger with only a keypair can take part');
 
   // The whole point: this key has never touched the box, and it is not the board key.
   const alice = newKey();
@@ -215,8 +226,13 @@ async function req(method, p, body) {
     assert.ok(v.ok, `chain broken: ${JSON.stringify(v)}`);
   });
 
-  srv.kill();
-  fs.rmSync(DIR, { recursive: true, force: true });
+  } catch (e) {
+    fail++;
+    console.log(`  FAIL uncaught mid-sequence: ${(e && e.message) || e}`);
+  } finally {
+    srv.kill();
+    fs.rmSync(DIR, { recursive: true, force: true });
+  }
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();
