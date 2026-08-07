@@ -26,6 +26,10 @@ const { verifyInitData } = require('../lib/telegram-initdata');
 const { buildEntry, newNonce } = require('../lib/entry');
 const { Chain } = require('../lib/chain');
 const { DATA_DIR: DATA } = require('../lib/datadir');
+const { recordTitle } = require('../lib/market-titles');
+const { buildReceipt } = require('./receipt');
+const { plainReceipt } = require('../lib/receipt-plain');
+const { standing } = require('../lib/tiers');
 
 const PORT = Number(process.env.TAPE_MINIAPP_PORT || 3219);
 const APP_HTML = path.join(__dirname, '..', 'web', 'app-prototype.html');
@@ -149,7 +153,17 @@ function myCalls(handle) {
     return { ...p, status: 'settled', won: win > p.entry, pnl: win - p.entry };
   }).reverse();
   const spec = specializationOf(calls);
-  return { handle, calls, open: calls.filter((c) => c.status === 'open').length, settled: calls.filter((c) => c.status === 'settled').length, categories: spec.categories, specialization: spec.specialization };
+  return {
+    handle,
+    calls,
+    open: calls.filter((c) => c.status === 'open').length,
+    settled: calls.filter((c) => c.status === 'settled').length,
+    categories: spec.categories,
+    specialization: spec.specialization,
+    // What they've earned and what the next rung costs. Computed here rather than in the client
+    // so the rules are one implementation a caller can re-run against their own calls.
+    standing: standing(calls),
+  };
 }
 
 // A caller's chain-verifiable record, grouped by lane, for the profile popup.
@@ -221,6 +235,19 @@ async function handleCall(req, res) {
   const units = Math.round(Number(size) * 100) / 100;
   if (!Number.isFinite(units) || units < 0.25 || units > 1000) return json(res, 400, { error: 'size must be 0.25–1000 units' });
 
+  // Write down the question we were showing when they tapped.
+  //
+  // A Polymarket condition id is opaque, so a receipt for a call made here rendered as a bare
+  // 64-hex string — "the receipt is unreadable to a human, idk what it's claiming" (Jiggy on his
+  // own receipt #386, 2026-08-07). The gate's resolver only caches a title once a market is being
+  // resolved, which is far too late: the receipt is read the moment the call is made.
+  //
+  // The title comes from OUR cache of Polymarket's feed, never from the request body — a caller
+  // must not be able to choose the words their own receipt renders. It is still an annotation,
+  // stamped with a fetch time and marked unsigned everywhere it is shown.
+  const seen = marketsCache.data.find((x) => ('polymarket:' + x.id) === market);
+  if (seen && seen.q) { try { recordTitle(market, seen.q); } catch { /* annotation only — never block a call */ } }
+
   let rec;
   try {
     const entry = buildEntry({
@@ -259,6 +286,22 @@ const server = http.createServer(async (req, res) => {
       const id = u.searchParams.get('identity');
       if (!id) return json(res, 400, { error: 'identity required' });
       return json(res, 200, callerDetail(id));
+    }
+    // A receipt the app can render in a sheet instead of throwing the reader into Safari.
+    //
+    // Same receipt bytes as /r/<seq> — this returns the built receipt AND a plain-English
+    // reading of it, so the mini app never has to invent its own account of what a row claims.
+    // 202 (not 404) while unanchored: that is a routine ≤15-minute wait, and the API already
+    // learned once that returning a failure shape for it makes every client cry wolf.
+    if (req.method === 'GET' && u.pathname === '/api/receipt') {
+      const seq = u.searchParams.get('seq');
+      if (!/^[0-9]{1,9}$/.test(String(seq))) return json(res, 400, { error: 'seq required' });
+      let built;
+      try { built = buildReceipt(String(seq)); } catch (err) {
+        const pending = /not covered by any anchor/.test(err.message);
+        return json(res, pending ? 202 : 404, { error: pending ? 'pending' : 'not found', reason: err.message });
+      }
+      return json(res, 200, { receipt: built, plain: plainReceipt(built, { titles: TITLES }) });
     }
     if (req.method === 'POST' && u.pathname === '/api/call') {
       return await handleCall(req, res);

@@ -184,6 +184,39 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 .bv{font-size:11px;font-weight:700;margin-top:4px}
 .bv.up{color:var(--green)}.bv.down{color:var(--red)}
 .bl{font-size:8.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* receipt sheet — the same receipt as /r/<seq>, read in the app instead of in Safari */
+.rcpt-h{font-size:9.5px;letter-spacing:.16em;color:var(--dim);padding-right:34px}
+.rcpt-q{font-size:17px;font-weight:800;line-height:1.28;margin:7px 0 0;overflow-wrap:anywhere}
+.rcpt-claim{font-size:14px;font-weight:700;color:var(--amber);margin-top:11px;line-height:1.45}
+.rcpt-stake{font-size:12px;color:var(--dim);line-height:1.65;margin-top:7px}
+.rcpt-meta{font-size:10.5px;color:var(--dim);margin-top:10px;line-height:1.6;
+  border-top:1px dashed var(--line);padding-top:9px;overflow-wrap:anywhere}
+.rcpt-lu{font-size:10px;color:var(--dim);line-height:1.55;margin-top:8px;opacity:.9;
+  border-left:2px solid var(--line);padding-left:8px}
+.pf{display:flex;gap:10px;border:1px solid var(--line);border-radius:11px;padding:11px 12px;
+  margin-top:7px;background:rgba(27,22,16,.6);align-items:flex-start}
+.pf .tk{color:var(--green);font-weight:800;line-height:1.3}
+.pf .t{font-size:12.5px;font-weight:700;line-height:1.35}
+.pf .d{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.6}
+.pf.no{border-left:2px solid var(--amber)}.pf.no .tk{color:var(--amber)}
+.rbtn{display:block;width:100%;text-align:center;background:transparent;border:1px solid var(--line);
+  border-radius:10px;color:var(--ink);font:inherit;font-size:11.5px;padding:10px;margin-top:9px;cursor:pointer}
+
+/* tier ladder — what you're working toward */
+.tier{border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin:0 2px 13px;
+  background:var(--card)}
+.tier .th{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.tier .now{font-size:13px;font-weight:800;color:var(--amber);letter-spacing:.02em}
+.tier .nxt{font-size:9.5px;letter-spacing:.14em;color:var(--dim)}
+.tier .un{font-size:11px;color:var(--dim);line-height:1.6;margin-top:6px}
+.treq{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:6px 0;
+  border-top:1px dashed var(--line);margin-top:6px}
+.treq .lb{color:var(--dim)}
+.treq.ok .lb{color:var(--ink)}
+.treq .vv{white-space:nowrap;color:var(--dim);font-weight:700}
+.treq.ok .vv{color:var(--green)}
+.tbar{height:3px;border-radius:2px;background:var(--line);margin-top:9px;overflow:hidden}
+.tbar i{display:block;height:100%;background:linear-gradient(90deg,var(--orange),var(--amber))}
 .lrow{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-top:1px dashed var(--line);color:var(--dim)}
 .lrow .op{color:var(--amber)}
 .octag{border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:9px;letter-spacing:.05em;margin-left:4px}
@@ -402,6 +435,33 @@ async function loadData(){
   renderMarkets(); renderBoard(); renderMe();
 }
 
+// The ladder: what you hold, and exactly what the next rung costs.
+//
+// Rendered as an unfinished to-do list rather than a padlock — every requirement shows have/need
+// so there is always a specific next number to move, and the rules are the ones lib/tiers.js
+// computes (one implementation, re-runnable by the caller against their own calls).
+function renderTier(s){
+  if(!s||!s.tiers) return '';
+  const next=s.tiers.find(t=>t.key===s.next);
+  const held=s.heldName?`${s.heldMark} ${s.heldName}`:'UNRANKED';
+  let h=`<div class="tier"><div class="th"><div class="now">${esc(held)}</div>`;
+  h+=`<div class="nxt">${next?'NEXT · '+esc(next.name):'TOP RUNG'}</div></div>`;
+  if(!next){ h+=`<div class="un">Every rung held. Your calls can be paywalled over x402.</div></div>`; return h; }
+  h+=`<div class="un">${esc(next.unlocks)}</div>`;
+  for(const c of next.checks){
+    // maxCatShare is a ceiling, so it reads as a share, not a count — printing "0.6 / 0.7"
+    // beside "12 / 40 settled calls" would look like progress toward a target it is not.
+    const isShare=c.key==='maxCatShare';
+    const val=isShare?`${Math.round(c.have*100)}% in one`:`${c.have} / ${c.want}`;
+    h+=`<div class="treq ${c.ok?'ok':''}"><span class="lb">${c.ok?'✓':'○'} ${esc(c.label)}</span><span class="vv">${esc(val)}</span></div>`;
+  }
+  h+=`<div class="tbar"><i style="width:${Math.round(next.done/next.total*100)}%"></i></div>`;
+  h+=`<div class="un" style="margin-top:9px">Measured over your last ${s.stats.windowDays} days, so it
+    decays — the right to charge is one you keep holding, not one you won once. Only settled calls
+    count: an open bag is worth nothing here until it resolves.</div></div>`;
+  return h;
+}
+
 // MY RECORD — the signed-in user's own calls, read live from the chain (open bags included).
 async function renderMe(){
   const el=document.getElementById('melist'); if(!el)return;
@@ -410,6 +470,7 @@ async function renderMe(){
   if(!d||!d.handle){ return; }
   const n=d.calls.length;
   let html=`<div class="r"><div class="rk one">◆</div><div class="id"><b>@${esc(d.handle)}</b><span class="bg human">HUMAN · TELEGRAM · ${n} CALL${n===1?'':'S'}${d.open?` · ${d.open} OPEN`:''}</span></div><div class="edge flat">—</div></div>`;
+  html+=renderTier(d.standing);
   if(!n){ html+='<div class="r"><div class="id"><span class="bg human">no calls yet — tap a market to make your first</span></div></div>'; }
   for(const c of d.calls){
     const px=Math.round(c.entry*100), u=c.size||1;
@@ -420,10 +481,55 @@ async function renderMe(){
   el.innerHTML=html;
 }
 
-// Tap a call on MY RECORD → open its on-chain receipt.
+// Tap a call on MY RECORD → its receipt, IN the app.
+//
+// This used to hand the seq to TG.openLink, which throws the reader out to Safari for what is
+// their own row. Leaving the app to read your own receipt reads as leaving the product, and the
+// page you land on is written for a verifier, not for the person who just tapped a button.
+// So the sheet leads with the plain reading (bin/miniapp.js /api/receipt) and the full technical
+// page stays one tap further out for anyone who wants the bytes.
+async function openReceipt(seq){
+  const m=document.getElementById('modal'), body=document.getElementById('modalBody');
+  body.innerHTML='<p class="hint">loading receipt…</p>'; m.classList.add('show');
+  let d,code;
+  try{ const r=await fetch('api/receipt?seq='+encodeURIComponent(seq)); code=r.status; d=await r.json(); }
+  catch(e){ body.innerHTML='<p class="hint">could not load that receipt</p>'; return; }
+  // 202 is a normal ≤15-min wait for the next anchor, not a failure — say so in those words.
+  if(code===202){
+    body.innerHTML=`<div class="rcpt-h">RECEIPT #${esc(seq)}</div>
+      <div class="rcpt-q">Waiting for the next anchor</div>
+      <div class="rcpt-stake">Your call is already signed and in the chain. Anchors are written to
+      Solana at least every 15 minutes, and the receipt appears the moment yours is covered.
+      This is a wait, not a problem.</div>`;
+    return;
+  }
+  if(!d||!d.plain){ body.innerHTML='<p class="hint">no receipt for that row yet</p>'; return; }
+  const p=d.plain;
+  let html=`<div class="rcpt-h">RECEIPT #${esc(p.seq)}</div>
+    <div class="rcpt-q">${esc(p.headline)}</div>
+    <div class="rcpt-claim">${esc(p.claim)}</div>`;
+  if(p.stake) html+=`<div class="rcpt-stake">${esc(p.stake)}</div>`;
+  if(p.questionLookedUp) html+=`<div class="rcpt-lu">↑ the question text is looked up from the venue and is
+    <b>not part of what was signed</b> — the venue can edit it. The signed identifier is below.</div>`;
+  html+=`<div class="rcpt-meta">signed ${esc(p.signedAt||'—')}<br>market: ${esc(p.market||'—')}</div>`;
+  html+='<div class="plane">WHAT THIS PROVES</div>';
+  for(const f of p.proves) html+=`<div class="pf"><div class="tk">✓</div><div><div class="t">${esc(f.t)}</div><div class="d">${esc(f.plain)}</div></div></div>`;
+  // Same size type as the proofs above, deliberately — a summary that carries only the
+  // impressive half is marketing.
+  html+=`<div class="pf no"><div class="tk">!</div><div><div class="t">What it does not prove</div>
+    <div class="d">${esc(p.notProves)}</div></div></div>`;
+  if(p.explorer) html+=`<button class="rbtn" data-open="${esc(p.explorer)}">view the Solana transaction ↗</button>`;
+  html+=`<button class="rbtn" data-open="${esc(p.url)}">full receipt + verify it yourself ↗</button>`;
+  body.innerHTML=html;
+}
 document.getElementById('melist').addEventListener('click',(e)=>{
-  const r=e.target.closest('.rc'); if(!r||!r.dataset.seq)return;
-  const url='https://tape.drainfun.xyz/r/'+r.dataset.seq;
+  const r=e.target.closest('.rc'); if(!r||!r.dataset.seq)return; openReceipt(r.dataset.seq);
+});
+// The two external links inside the sheet are the only places we still leave the app, and both
+// are explicit "go check us" actions rather than the default path to your own row.
+document.getElementById('modalBody').addEventListener('click',(e)=>{
+  const b=e.target.closest('[data-open]'); if(!b)return;
+  const url=b.dataset.open;
   if(TG&&TG.openLink) TG.openLink(url); else window.open(url,'_blank');
 });
 
