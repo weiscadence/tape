@@ -27,8 +27,10 @@ html,body{margin:0;padding:0;color:var(--ink);
   background-attachment:fixed}
 /* Fullscreen while the loader is up; once you're in, the moving graphic lives only in a
    top band and everything below is solid — per Jiggy's note. */
-/* The pipes canvas is the background (z0), fullscreen on the loader and a top band once in. */
-#sky{position:fixed;inset:0;z-index:0;display:block;transition:height .5s ease}
+/* The pipes canvas is the background (z0), fullscreen on the loader and a top band once in.
+   Solid --bg fill so even if the canvas never paints, the field is a solid dark colour — the
+   app content is never what shows behind the loader. */
+#sky{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block;background:var(--bg);transition:height .5s ease}
 body.entered #sky{height:38vh;
   -webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
 @media (prefers-reduced-motion:reduce){#sky{opacity:.5}}
@@ -162,7 +164,6 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 </head>
 <body>
 <canvas id="sky"></canvas>
-<div class="proto">PREVIEW · REAL MARKETS · REAL CALLS IN TELEGRAM</div>
 
 <div class="gate" id="gate">
   <div class="mark">TAPE</div>
@@ -328,23 +329,30 @@ loadData();
   const c=document.getElementById('sky'), x=c.getContext('2d'); if(!x)return;
   let W,H,DPR;
   function size(){ DPR=Math.min(2,window.devicePixelRatio||1);
-    const cw=c.clientWidth||innerWidth, ch=c.clientHeight||innerHeight;
+    const entered=document.body.classList.contains('entered');
+    // Fullscreen while the loader is up — use the VIEWPORT, not clientWidth, which Telegram's
+    // in-app webview reports as 0/short before layout settles (that's why the pipes used to
+    // clump in the top-left). Once you're in, size to the collapsed top band.
+    const cw = entered ? (c.clientWidth||innerWidth) : innerWidth;
+    const ch = entered ? (c.clientHeight||Math.round(innerHeight*0.38)) : innerHeight;
     W=c.width=cw*DPR; H=c.height=ch*DPR;
     x.fillStyle='#100d09'; x.fillRect(0,0,W,H); }
   size();
   const PAL=['#ffb020','#f0902a','#e8dcc0','#cc7a33','#ffcf6b'];
   const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
-  function iso(px,py,pz){ const t=26*DPR; return [ W/2 + (px-py)*t, H*0.42 + (px+py)*t*0.5 - pz*t ]; }
-  function Pipe(){ this.reset(); }
-  Pipe.prototype.reset=function(){
-    this.p=[ (Math.random()*10|0)-5, (Math.random()*10|0)-5, (Math.random()*6|0)-1 ];
+  function iso(px,py,pz){ const t=26*DPR; return [ W/2 + (px-py)*t, H*0.46 + (px+py)*t*0.5 - pz*t ]; }
+  function Pipe(){ this.reset(true); }
+  Pipe.prototype.reset=function(spread){
+    // Start points spread across the whole grid so the pipes fill the field, not just the middle.
+    const R = spread ? 15 : 6;
+    this.p=[ (Math.random()*R*2|0)-R, (Math.random()*R*2|0)-R, (Math.random()*6|0)-1 ];
     this.d=DIRS[Math.random()*6|0]; this.col=PAL[Math.random()*PAL.length|0];
     this.life=60+(Math.random()*90|0); this.prev=iso(this.p[0],this.p[1],this.p[2]); };
   Pipe.prototype.step=function(){
     if(this.life--<=0){ this.reset(); return; }
     if(Math.random()<0.28){ let nd; do{ nd=DIRS[Math.random()*6|0]; }while(nd[0]===-this.d[0]&&nd[1]===-this.d[1]&&nd[2]===-this.d[2]); this.d=nd; }
     this.p=[this.p[0]+this.d[0], this.p[1]+this.d[1], this.p[2]+this.d[2]];
-    if(Math.abs(this.p[0])>16||Math.abs(this.p[1])>16||this.p[2]>9||this.p[2]<-3){ this.reset(); return; }
+    if(Math.abs(this.p[0])>18||Math.abs(this.p[1])>18||this.p[2]>9||this.p[2]<-3){ this.reset(); return; }
     const cur=iso(this.p[0],this.p[1],this.p[2]);
     x.lineCap='round'; x.lineJoin='round';
     x.strokeStyle=this.col; x.globalAlpha=0.9; x.lineWidth=7*DPR;
@@ -353,12 +361,23 @@ loadData();
     x.beginPath(); x.moveTo(this.prev[0],this.prev[1]); x.lineTo(cur[0],cur[1]); x.stroke();
     x.globalAlpha=0.9; x.fillStyle=this.col;
     x.beginPath(); x.arc(cur[0],cur[1],4.5*DPR,0,7); x.fill(); x.globalAlpha=1; this.prev=cur; };
-  let pipes=[]; for(let i=0;i<7;i++) pipes.push(new Pipe());
+  // Count scales with screen area so the fullscreen loader reads as a full network, not a few strands.
+  function makePipes(){ const entered=document.body.classList.contains('entered');
+    const area=(c.width/DPR)*(c.height/DPR);
+    const n=entered?7:Math.max(10,Math.min(20,Math.round(area/34000)));
+    const arr=[]; for(let i=0;i<n;i++) arr.push(new Pipe()); return arr; }
+  let pipes=makePipes();
   function tick(){ x.fillStyle='rgba(16,13,9,0.06)'; x.fillRect(0,0,W,H); for(const p of pipes) p.step(); }
+  // Pre-warm so the loader opens with pipes already laid across the field, not growing from empty.
+  for(let i=0;i<40;i++) tick();
   const STEP=150; let last=0, live=!matchMedia('(prefers-reduced-motion:reduce)').matches;
   function loop(t){ if(!live) return; if(!document.hidden && t-last>=STEP){ last=t; tick(); } requestAnimationFrame(loop); }
   if(live) requestAnimationFrame(loop);
-  let rt; window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(function(){ size(); pipes=[]; for(let i=0;i<7;i++) pipes.push(new Pipe()); },200); });
+  // Telegram's webview reports the real viewport a beat late — re-measure after layout/load.
+  function remeasure(){ size(); pipes=makePipes(); for(let i=0;i<40;i++) tick(); }
+  window.addEventListener('load', remeasure);
+  requestAnimationFrame(remeasure);
+  let rt; window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(remeasure,200); });
 })();
 </script>
 </body>
