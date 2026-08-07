@@ -149,6 +149,51 @@ and if the slot still cannot be read the function **throws** carrying `submitted
 a caller can never mistake "I could not read the time" for "the anchor failed." Verified by
 running a second live anchor: real slot returned.
 
+## Getting us out of the loop: who decides whether a call was right?
+
+The undeletable part is only half of it. A record where **the operator judges the outcome** is
+still a record you have to trust us about — so the direction of travel is to remove ourselves
+from every step that could be leaned on, and to be precise about which steps are already gone.
+
+**Gone already.** Outcomes are read from the market's own resolution, by a cron every 30
+minutes (`bin/settle.js` → `lib/resolve.js`), and **7 calls have already closed with no human
+in the decision** — across three independent sources, so it is not one integration flattering
+itself:
+
+| resolution source | what it reads | auto-closed so far |
+|---|---|---|
+| **GitHub** | did PR #N merge, and in what order | 5 |
+| **Pyth** | signed price feed at a deadline | 1 |
+| **Polymarket** | the market's own settled outcome | wired + tested, none resolved yet |
+| **Hyperliquid HIP-4** | outcome market above/below at expiry | wired + tested, none resolved yet |
+| **Delphi** | arena market resolution | wired + tested |
+| demo | fixture, for exercising the path | 1 |
+
+```
+node bin/settle.js                    # the cron's own command; prints closed / not-yet / unsupported
+```
+
+It reports `unsupported` out loud for open positions no resolver covers (3 at the time of
+writing) rather than leaving them silently unjudged — an unresolvable call must look like a
+hole, not like a pass.
+
+**Also gone: who picks the question.** A caller choosing their own questions has a highlight
+reel, not a record. So a round publishes a **seed commitment** and a catalogue hash *before*
+enrolment opens, freezes the enrolled set into a Merkle root, then reveals the seed — and each
+caller's question is *derived* from `(seed, enrolled_root, caller_key)`. The caller cannot pick
+it, and **we cannot pick it for them**, because the seed was committed before we knew who would
+enrol. `tape.jsonl` seq 13–18 is a complete such round, anchored. Non-answers are recorded as
+`no_answer` (12 on the tape) so ducking an assigned question is visible rather than absent.
+
+**Where this goes.** More venues, in rough order of how much they remove us: any venue that
+publishes a machine-readable settlement can be a lane, and each one added shrinks the set of
+calls whose outcome depends on our judgement. The honest limit — stated because it does not go
+away — is **intake**: we could still refuse to accept a call. Anchoring proves what *was*
+recorded, never that nothing was turned away. That is logged as an open item (`THREAT-MODEL.md`
+D1) and the fix is client-side submit receipts, which is why `verify/tape-promise.mjs` exists.
+
+---
+
 ## Next
 
 The four items that stood here through 2026-07-29 have all shipped, and the entries above

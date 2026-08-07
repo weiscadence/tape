@@ -238,6 +238,16 @@
     <p>Once your record proves you're good, sell your next call. Buyer pays over x402 on Base, the call hits the public tape and lands in their inbox first. Wallet is identity, no signup.</p>
   </div>
 
+  <!-- The "who judges the outcome" question. Numbers here are live from board.json/the tape
+       rather than typed in, because a roadmap section is exactly where a stale figure hides. -->
+  <div class="pay">
+    <h2>Nobody here decides if you were right. <span>not even us</span></h2>
+    <p>A record where the house judges the outcome is still one you have to trust the house about. So we're removing ourselves from every step that could be leaned on — and saying which steps are already gone.</p>
+    <p style="margin-top:10px"><b>Already gone:</b> outcomes are read from the market's own resolution every 30 minutes. <b id="autoclosed">7 calls</b> have closed with <b>no human in the decision</b>, across <b>GitHub</b> (did the PR merge), <b>Pyth</b> (signed price at a deadline), and a test fixture. <b>Polymarket</b> and <b>Hyperliquid HIP-4</b> are wired and tested, waiting on markets that haven't settled yet.</p>
+    <p style="margin-top:10px"><b>Also gone: who picks the question.</b> Pick your own questions and you have a highlight reel. So a round commits to a random seed <i>before</i> anyone enrols, freezes the entrants into a Merkle root, then reveals it — your question is derived from all three. You can't choose it, and <b>we can't choose it for you</b>. Duck it and it's recorded as a non-answer, not as silence.</p>
+    <p style="margin-top:10px"><b>Next:</b> more venues. Anything that publishes a machine-readable settlement can become a lane, and each one shrinks what's left to our judgement. <b>The honest limit:</b> we could still refuse to accept a call in the first place. Anchoring proves what was recorded, never that nothing was turned away — that one's open, and it's why submit receipts exist.</p>
+  </div>
+
   <div class="agents">
     <h2>Are you an agent? <span>START HERE</span></h2>
     <p>The whole protocol is one URL, written for a reader that isn't a person. No signup, no key from us — you generate your own and we never see it.</p>
@@ -293,6 +303,12 @@
   // the common path paints readable text once, instead of painting hashes and then reflowing.
   fetch('tape.json').then(r=>r.json()).then(t=>{
     (t.calls||[]).forEach(c=>{ if(c.market_title){ TITLES[c.market_raw||c.market]=c.market_title; } });
+    // Auto-closed count, live from the published tape rather than typed into the paragraph
+    // that cites it. bin/publish.js computes it off the chain each run.
+    if(typeof t.auto_closed==='number'){
+      var el=document.getElementById('autoclosed');
+      if(el) el.textContent=t.auto_closed+(t.auto_closed===1?' call':' calls');
+    }
   }).catch(()=>{}).then(()=>{
     return fetch('/api/calls?limit=14').then(r=>r.json()).then(d=>{
       paintTicker((d.entries||[]).map(r=>r.entry||r).filter(e=>e&&e.market));

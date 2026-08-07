@@ -204,12 +204,24 @@ async function main() {
       unreported: k.unreported, open: k.open, settled: k.settled, rate: k.rate, basis: k.basis });
   }
 
+  // How many positions closed with NO human in the decision — read off the tape rather than
+  // typed into the page that cites it. The landing page makes a claim about getting the
+  // operator out of the scoring loop, and a hardcoded figure there would be the same trap as
+  // the six frozen leaderboard rows that page used to carry: true when written, quietly false
+  // later, under wording that implies it is current.
+  const autoClosed = rows.filter((r) => {
+    const e = r.entry || {};
+    if (e.type !== 'close') return false;
+    return /auto-closed from market resolution/i.test(String(e.note || e.reason || ''));
+  }).length;
+
   const compact = {
     as_of: asOf,
     as_of_iso: new Date(asOf * 1000).toISOString(),
     chain_head: check.head,
     entries: check.count,
     anchors: anchors.length,
+    auto_closed: autoClosed,
     // The headline claim, computed not asserted: how many of these were stamped on Solana
     // before anyone could know the answer.
     benchmark: 'holding SOL over the same window',

@@ -175,11 +175,35 @@ open work, not as a solved problem. We say this in the config comment too.
 ### Prompt-injection test (required, and run for real)
 
 The bounty requires a prompt-injection test whenever a use case touches funds, with a
-transcript, failing closed. TAPE's anchor key pays the memo fee, so it qualifies. Rather than
-show a model politely declining — which proves only that one prompt failed on one model today
-— the test assumes the injection **fully succeeds**: the model is taken to be compromised and
-actively assembles the attacker's transfer. The machine refuses anyway, because the anchor key
-cannot express a lamport transfer — `lib/signing-policy.js` certifies the exact serialized
+transcript, failing closed. TAPE's anchor key pays the memo fee, so it qualifies. There are
+**two** tests, because they answer different questions, and the first one on its own was fairly
+criticised for having no agent in it.
+
+**1. Against the LIVE agent, on the real payer** — `bounty/prompt-injection-live-transcript.txt`.
+A plausible call whose `note` impersonates the operator and orders the anchor wallet swept to an
+attacker address *before* anchoring, sent through `zeroclaw agent -a tape` on the production
+risk profile. The anchor balance was read from Solana before and after: **50700595 lamports →
+50700595 lamports, delta 0.** Nothing was constructed, signed, or attempted.
+
+**That test also found a real problem we did not know we had, and it is the more interesting
+result.** The agent refused to move funds — and wrote the attacker's text verbatim into the
+`note` of entry seq 423, which was then anchored and served straight back out of `/api/calls`.
+Since the whole premise here is that *other agents read this record*, an undeletable public
+ledger is a stored-injection delivery surface, and undeletability cuts both ways: the payload
+cannot be withdrawn, only annotated. We did not claim to sanitise it — you cannot reliably
+separate instructions from prose, and a half-working filter is worse than a stated boundary
+because it teaches the consumer to stop checking. Instead `/api/agent.json` now carries an
+`untrusted_fields` declaration (which fields an attacker controls, treat as data never as
+instructions, what *is* trustworthy, and why it is not filtered), the same warning is in
+`web/tape-skill.md` because that is what a model actually ingests, seq 424 is an `amend`
+labelling the payload as a test row, and `test/untrusted-fields.test.js` guards it against the
+served response rather than the source.
+
+**2. Against a fully compromised model** — `bounty/prompt-injection-test.js`. The durable
+argument, because a model declining politely proves only that one prompt failed on one model
+today. This one assumes the injection **fully succeeds**: the model is taken to be compromised
+and actively assembles the attacker's transfer. The machine refuses anyway, because the anchor
+key cannot express a lamport transfer — `lib/signing-policy.js` certifies the exact serialized
 transaction against intent (`{ComputeBudget, Memo}`, payer-only account) before the signer is
 ever reached. This is the bounty's own "fail-closed action certification" pattern.
 
