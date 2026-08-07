@@ -94,6 +94,14 @@ level = "supervised"
 workspace_only = false
 allowed_commands = ["node"]
 allowed_roots = ["/ABSOLUTE/PATH/projects/tape", "/tmp"]
+# Deny the agent's FILE tools any path outside the project — the key directory and the
+# ZeroClaw config (which holds the channel token) especially. Defense-in-depth, and honest
+# about its limit: `allowed_commands = ["node"]` is load-bearing (every tape tool is a
+# `node <script>` shell command), and the node interpreter can read any file the OS user can.
+# So this closes the file-READ-TOOL path to the key; it does NOT close the node-exec path.
+# The only real close for THAT is running the anchor daemon and key under a DIFFERENT OS user
+# than the agent (see THREAT-MODEL.md D3) — a config file cannot sandbox an interpreter.
+forbidden_paths = ["/etc", "/root", "/usr", "/bin", "/sbin", "/lib", "/opt", "/boot", "/dev", "/proc", "/sys", "~/.ssh", "~/.gnupg", "~/.aws", "~/.config", "~/.zeroclaw"]
 auto_approve = ["tape__tape_markets", "tape__tape_post", "tape__tape_anchor", "tape__tape_receipt", "tape__tape_verify"]
 require_approval_for_medium_risk = false
 block_high_risk_commands = true

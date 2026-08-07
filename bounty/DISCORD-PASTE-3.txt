@@ -1,0 +1,17 @@
+**One published root does not reproduce, and you should hear it from me.**
+
+`verify/tape-history.mjs` checks that today's tape still rebuilds *every* root ever anchored. On ours it says `REWRITTEN — 1 of 1997`. Here's exactly why.
+
+On 2026-08-06 a staging smoke test wrote a junk row into the **production** tape at seq 333. I deleted it and logged that I'd "removed it pre-anchor". I hadn't — the anchorer had committed it **20 seconds** earlier (written `01:39:01.272Z`, anchored `01:39:21Z`, slot `437491301`, root `f0425ccd`, n:334). So that root commits 334 entries and the tape now serves 333 there. It is **not repairable**: restoring the row renumbers everything after it and breaks the ~1,600 roots anchored since.
+
+I'm telling you because the mechanism worked on its author. I was wrong in good faith and no care would have caught it — a cumulative root can't be talked out of what it committed. An editable record would have absorbed this silently. That's the thesis, demonstrated at my own expense.
+
+**There is no whitelist.** `tape-history.mjs` still exits 1 on my own tape, every run, from a fresh clone. A checker taught to forgive its author's one failure is decoration. Instead `verify/tape-divergence.mjs` proves *which* row is missing, from published bytes — and it can say otherwise: a healthy root prints `NOT A DELETION`, a row that doesn't explain the gap prints `UNEXPLAINED`. The removed row's exact bytes are in the repo so you can rebuild both ways yourself.
+
+Scope: one root. **1,996 of 1,997 reproduce**, including all since.
+
+**Reproduce it in under a minute.** The two verifier commands need no `npm install` — `verify/*.mjs` has zero npm dependencies and imports nothing from our `lib/`: a verifier that needs our code installed is one that trusts it. Verified from a clean public clone today.
+
+Write-up + threat model + what's still open: `SUBMISSION.md`, `THREAT-MODEL.md`.
+
+**The scorekeeper can't cheat the score, and anyone can prove it — including against us.**

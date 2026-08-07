@@ -205,6 +205,19 @@ acceptance now rests on the balance being deliberately small and per-day capped 
 anchoring path — not on there being nothing to take. Upgrading to a signer isolated from the
 agent host is the actual fix and is open work, not a solved problem.
 
+*Defense-in-depth added 2026-08-07:* the agent's `tape` risk profile now lists `~/.config`
+and `~/.zeroclaw` in `forbidden_paths`, so the agent's file-read **tool** can no longer open
+the keypair file or the config that holds the channel token. This is honestly partial: every
+tape tool is a `node <script>` shell command, so `allowed_commands = ["node"]` is load-bearing
+and cannot be removed, and the `node` interpreter reads any file the OS user can — a prompt
+injection that gets the agent to run an arbitrary `node` command still reaches the key. A
+config file cannot sandbox an interpreter. The only close for the exec path is running the
+anchor daemon and key under a **different OS user than the agent**; a `tapesvc` user already
+exists on the box (it runs the intake API), so the mechanism is available. It is deliberately
+**not** switched on during the judging window because the anchor runs inside ZeroClaw's own
+cron, and moving it to a separate-user timer would change the "ZeroClaw's cron is the only
+anchorer" claim the submission makes — a tradeoff for the operator to make, not a silent one.
+
 *Narrowed:* the one process reachable from the open internet — the intake — is no longer one
 of those processes. See E1. The claim in `api.js` that the receipt key is deliberately not the
 anchor key was true of the code and false of the deployment: a process that can read the anchor

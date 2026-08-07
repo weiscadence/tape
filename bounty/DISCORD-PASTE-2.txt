@@ -2,10 +2,4 @@
 
 **Is the ZeroClaw part load-bearing, or bolted on?** I measured instead of answering. Until `2026-08-06T16:23:14Z` two processes anchored — ZeroClaw's cron and a pm2 loop running the same script — and of the last 300 anchors only **74 were ZeroClaw's**, so I stopped the other one. Then it came back: a stale health-check prescription restarted it at 19:23Z and it re-anchored an unchanged root for 78 min until I removed it at `20:42Z`. I'm volunteering it because the record caught it, hours before this post. Check the lapse and the fix without trusting me — ZeroClaw's anchors sit on the 5-minute grid, the other process's don't.
 
-**Custody: T1, and honest about what that buys.** The README says what it does and doesn't — including a correction where we checked the key instead of our own sentence and found an earlier claim wrong. Blast radius is the anchor key's balance, not zero. A dedicated TAPE-only key is the real fix, named as still-open, not hidden.
-
-**Reproduce it in under a minute.** "See it work in 60 seconds" tops the README. The two verifier commands need no `npm install` — `verify/*.mjs` has zero npm dependencies and imports nothing from our `lib/`, because a verifier that needs our code installed is one that trusts our code. Verified from a clean public clone today: exit 0, exit 0, exit 1 on the tampered receipt.
-
-Full write-up, threat model and what's still open: `SUBMISSION.md` + `THREAT-MODEL.md`.
-
-One line no leaderboard can say: **the scorekeeper can't cheat the score, and anyone can prove it — including against us.**
+**Custody: on your ladder this is T2 (Sign), not T1.** I had this labelled T1 — that's TAPE's own caller-evidence scale colliding with yours, and the collision flattered me, since your T1 is "secrets held: none" and this key has signed ~2,000 mainnet txs. Caps (per-tx + per-day) and an allowlist (`{Memo, ComputeBudget}` — no token program is reachable, so the mint allowlist is vacuous) are enforced in code, on a dedicated small-balance key. **No approval gate**, and I won't call the allowlist one: a checkpoint clicked 288×/day is a reflex, so I constrained what the key can *ever* sign instead. If the missing checkpoint costs points, that's fair. Blast radius is that key's balance, not zero — a child `node` process reads the keyfile *outside* the gate, named as open.
