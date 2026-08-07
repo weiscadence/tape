@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>TAPE → ZeroClaw bounty — submit</title>
+<style>
+  :root{
+    --bg:#0b0c0e; --panel:#141619; --line:#24272c; --ink:#e9eaec;
+    --dim:#8c9198; --accent:#ff8a3d; --ok:#3ddc84; --warn:#ffcc4d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:16px 14px 80px;max-width:760px;margin-inline:auto}
+  h1{font-size:22px;margin:0 0 2px;letter-spacing:-.3px}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:1.4px;color:var(--dim);
+    margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .sub{color:var(--dim);font-size:14px;margin:0 0 18px}
+  .clock{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;padding:14px 16px;margin:0 0 6px}
+  .clock b{font-size:30px;font-variant-numeric:tabular-nums;letter-spacing:-1px;display:block}
+  .clock.late{border-left-color:#ff4d4d}
+  .clock small{color:var(--dim)}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;margin:0 0 12px}
+  .step h3{margin:0 0 6px;font-size:16px;display:flex;gap:9px;align-items:center}
+  .n{background:var(--accent);color:#0b0c0e;font-size:12px;font-weight:700;
+    width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:0 0 22px}
+  .step p{margin:0 0 10px;color:var(--dim);font-size:14px}
+  pre{background:#0d0e11;border:1px solid var(--line);border-radius:8px;padding:11px;
+    margin:0 0 10px;max-height:190px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+    font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c9cdd3}
+  button,a.btn{appearance:none;border:1px solid var(--line);background:#1d2025;color:var(--ink);
+    border-radius:8px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer;
+    text-decoration:none;display:inline-block;margin:0 8px 8px 0}
+  button.go,a.btn.go{background:var(--accent);border-color:var(--accent);color:#0b0c0e}
+  button.done{background:var(--ok);border-color:var(--ok);color:#0b0c0e}
+  video{width:100%;border-radius:10px;border:1px solid var(--line);background:#000;display:block;margin-bottom:10px}
+  .field{border-top:1px dashed var(--line);padding-top:12px;margin-top:12px}
+  .field:first-of-type{border-top:0;padding-top:0;margin-top:0}
+  .label{font-size:13px;color:var(--warn);font-weight:600;margin-bottom:4px}
+  .label .req{color:#ff6b6b}
+  code.val{display:block;background:#0d0e11;border:1px solid var(--line);border-radius:8px;
+    padding:10px;font:12.5px/1.5 ui-monospace,Menlo,monospace;color:#9fd8ff;
+    word-break:break-all;margin-bottom:8px}
+  ul{margin:0;padding-left:20px;color:var(--dim);font-size:14px}
+  li{margin-bottom:5px}
+  .fact{display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+    border-bottom:1px solid var(--line);font-size:14px}
+  .fact span:last-child{color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
+  .note{font-size:13px;color:var(--dim);background:#17130d;border:1px solid #3a2c17;
+    border-radius:8px;padding:10px 12px;margin:10px 0 0}
+  footer{margin-top:40px;color:#5b6068;font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+
+<h1>TAPE → ZeroClaw × Solana</h1>
+<p class="sub">Everything you need, in order. Nothing else is blocking.</p>
+
+<div class="clock" id="clock">
+  <small>Deadline — Superteam listing closes</small>
+  <b id="cd">—</b>
+  <small>2026-08-07 02:59:59 UTC · 21:59:59 your time (Aug 6)</small>
+</div>
+
+<h2>Part 1 — the Discord showcase post</h2>
+<p class="sub" style="margin-top:-4px">This <em>is</em> the submission. The rubric says so: "A submission is a showcase post. There is no other submission format." Do this one first.</p>
+
+<div class="step">
+  <h3><span class="n">1</span> Open the channel</h3>
+  <p>ZeroClaw Discord → <b>#solana-bounty</b>.</p>
+  <a class="btn go" href="https://discord.gg/zeroclaw" target="_blank" rel="noopener">Open ZeroClaw Discord ↗</a>
+</div>
+
+<div class="step">
+  <h3><span class="n">2</span> Attach the video</h3>
+  <p>2:38, 3.7 MB — a real phone recording of the Telegram channel, not slides. Under Discord's 10 MB free limit, so it uploads straight from your phone.</p>
+  <video controls preload="metadata" playsinline src="tape-demo.mp4"></video>
+  <a class="btn go" href="tape-demo.mp4" download="tape-demo.mp4">⬇ Download the video</a>
+</div>
+
+<div class="step">
+  <h3><span class="n">3</span> Send message 1</h3>
+  <p>Paste this with the video attached. 1,974 characters — inside Discord's 2,000 limit.</p>
+  <pre id="p1"></pre>
+  <button class="go" data-copy="p1">Copy message 1</button>
+</div>
+
+<div class="step">
+  <h3><span class="n">4</span> Send message 2</h3>
+  <p>Send immediately after, as a follow-up in the same thread. 2,000-char limit again — this one is 1,985.</p>
+  <pre id="p2"></pre>
+  <button class="go" data-copy="p2">Copy message 2</button>
+</div>
+
+<h2>Part 2 — the Superteam listing</h2>
+<p class="sub" style="margin-top:-4px">Three fields. Two are required. The answers are below — tap to copy, paste, submit.</p>
+
+<div class="step">
+  <a class="btn go" href="https://superteam.fun/earn/listing/zeroclaw" target="_blank" rel="noopener">Open the listing → Submit Now ↗</a>
+
+  <div class="field">
+    <div class="label">Demo video link <span class="req">(required)</span></div>
+    <code class="val" id="f1">https://drainfun.xyz/tape-demo.mp4</code>
+    <button data-copy="f1">Copy</button>
+    <div class="note"><b>Optional upgrade, ~60 seconds:</b> the field suggests YouTube/Vimeo/GDrive. Our own link works and plays in any browser (and self-hosting is literally the thesis) — but if you want the safest option, upload the file to YouTube as <b>Unlisted</b> and paste that link instead. Either is fine. Don't let this stop you submitting.</div>
+  </div>
+
+  <div class="field">
+    <div class="label">One-pager link (optional)</div>
+    <code class="val" id="f2">https://github.com/weiscadence/tape/blob/main/SUBMISSION.md</code>
+    <button data-copy="f2">Copy</button>
+  </div>
+
+  <div class="field">
+    <div class="label">Supporting material <span class="req">(required)</span></div>
+    <code class="val" id="f3">Repo (run it in 60s from the README): https://github.com/weiscadence/tape
+Write-up: https://github.com/weiscadence/tape/blob/main/SUBMISSION.md
+Threat model + custody tier: https://github.com/weiscadence/tape/blob/main/THREAT-MODEL.md
+Live board: https://tape.drainfun.xyz/
+Independent verifier (shares no code with the writer): https://github.com/weiscadence/tape/tree/main/verify</code>
+    <button data-copy="f3">Copy</button>
+  </div>
+</div>
+
+<h2>If a judge asks something</h2>
+<div class="step">
+  <div class="fact"><span>Anchors on Solana mainnet</span><span id="anchors">1,800+ and climbing</span></div>
+  <div class="fact"><span>Unbroken run</span><span>9.0 days, still anchoring</span></div>
+  <div class="fact"><span>Custody tier</span><span>T1 — builds, never signs transfers</span></div>
+  <div class="fact"><span>Prompt-injection test</span><span>3/3 fail closed</span></div>
+  <div class="fact"><span>Tests</span><span>npm test 109/109 · doctor 17 pass 0 fail</span></div>
+  <div class="fact"><span>Repo head</span><span>ca88d8a</span></div>
+  <ul style="margin-top:12px">
+    <li><b>"Is the number current?"</b> — it moves every ~5 min. <code>node bin/anchor-stats.js</code> prints it live.</li>
+    <li><b>"Prove the verifier can convict you."</b> — edit a number in any receipt and run <code>verify/</code>. It prints FRAUD, exit 1. Zero npm deps, imports nothing from our lib.</li>
+    <li><b>"Was ZeroClaw load-bearing?"</b> — message 2 discloses the 78-minute lapse tonight where a stale health prescription restarted a deprecated daemon. It's in there on purpose. Answer: yes, and here's the hole we found ourselves.</li>
+  </ul>
+</div>
+
+<h2>Already done — don't redo</h2>
+<div class="step">
+  <ul>
+    <li>Repo public and pushed (<code>ca88d8a</code>), README 60-second quickstart re-run from a clean clone.</li>
+    <li>Video rendered, captioned, under Discord's size limit.</li>
+    <li>Both messages written and length-checked against the 2,000-char cap.</li>
+    <li>The stale "only anchorer" claim caught and corrected before posting, in the docs and in message 2.</li>
+  </ul>
+</div>
+
+<footer>drainfun.xyz/zeroclaw · private</footer>
+
+<script>
+const DEADLINE = Date.parse('2026-08-07T02:59:59Z');
+function tick(){
+  const d = DEADLINE - Date.now(), el = document.getElementById('cd');
+  if (d <= 0){ el.textContent = 'CLOSED'; document.getElementById('clock').classList.add('late'); return; }
+  const h = Math.floor(d/3.6e6), m = Math.floor(d%3.6e6/6e4), s = Math.floor(d%6e4/1000);
+  el.textContent = `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s left`;
+  if (d < 5.4e6) document.getElementById('clock').classList.add('late');
+}
+tick(); setInterval(tick, 1000);
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-copy]');
+  if (!btn) return;
+  const text = document.getElementById(btn.dataset.copy).textContent;
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t);
+          t.select(); document.execCommand('copy'); t.remove(); }
+  const was = btn.textContent;
+  btn.textContent = '✓ Copied'; btn.classList.add('done');
+  setTimeout(() => { btn.textContent = was; btn.classList.remove('done'); }, 1800);
+});
+
+// Paste bodies are injected as text (never HTML) so markdown asterisks and
+// backticks survive verbatim into the clipboard.
+document.getElementById('p1').textContent = PASTE1;
+document.getElementById('p2').textContent = PASTE2;
+</script>
+</body>
+</html>
