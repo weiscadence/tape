@@ -111,12 +111,14 @@ function categorize(m) {
   if (/^pyth:|^demo:.*(sol|btc|eth)/i.test(m)) return 'Crypto';
   const t = titleOf(m).toLowerCase();
   const has = (...ws) => ws.some((w) => t.includes(w));
-  if (has('marlin', 'brave', 'red sox', 'white sox', 'yankee', 'nba', 'nfl', 'soccer', 'laliga', 'barcelona', 'champions league', 'tennis', 'national bank open', 'norrie', 'musetti', 'sabalenka', 'golf', 'wyndham', 'valorant', 'vct', ' vs ', 'win the')) return 'Sports';
-  if (has('iran', 'blockade', 'ceasefire', 'invade', 'election', 'president', 'prime minister', 'vance', 'nominee', 'clarity act', 'signed into law', 'hormuz')) return 'Politics';
-  if (has('fed', 'interest rate', 'rate', 'inflation', 'cpi', 'recession')) return 'Macro';
-  if (has('oil', 'wti', 'crude', 'gold', 'gas')) return 'Commodities';
-  if (has('sol', 'btc', 'eth', 'solana', 'bitcoin', 'ethereum', 'price')) return 'Crypto';
-  if (has('temperature', 'weather', 'rain')) return 'Weather';
+  // Politics FIRST so "win the nomination" doesn't fall into Sports on "win the".
+  if (has('election', 'nominat', 'presidential', 'republican', 'democrat', 'prime minister', 'congress', 'senate', 'signed into law', 'clarity act', 'vance', 'impeach', 'president')) return 'Politics';
+  if (has('iran', 'blockade', 'ceasefire', 'invade', 'hormuz', 'war', 'military', 'sanction')) return 'Politics';
+  if (has('fed', 'interest rate', 'rate hike', 'inflation', 'cpi', 'recession', 'gdp', 'jobs report')) return 'Macro';
+  if (has('oil', 'wti', 'crude', 'gold', 'natural gas', 'commodity')) return 'Commodities';
+  if (has('temperature', 'weather', 'rain', 'snow')) return 'Weather';
+  if (has('vs.', ' vs ', 'ufc', 'fight night', 'nba', 'nfl', 'mlb', 'padres', 'diamondback', 'sox', 'yankee', 'dodger', 'marlin', 'brave', 'tennis', 'national bank open', 'laliga', 'barcelona', 'champions league', 'valorant', 'vct', 'golf', 'wyndham', 'sabalenka', 'musetti', 'norrie')) return 'Sports';
+  if (has('sol', 'btc', 'eth', 'solana', 'bitcoin', 'ethereum', 'token', 'price')) return 'Crypto';
   return 'Other';
 }
 function specializationOf(calls) {
@@ -161,11 +163,21 @@ function callerDetail(identity) {
     l.n += 1; l.pnl += pnl; if (pnl > 0) l.wins += 1;
     return { market: p.market, side: p.side, pnl, edge: Number(p.edge) || 0, won: pnl > 0, seq: p.seq };
   }).sort((a, b) => a.seq - b.seq);
-  const spec = specializationOf(calls);
+  // Open positions for this identity, read from the chain. Disclosed publicly (you can't hide
+  // a bag) but NOT scored — outcome is unknown until it settles. Specialization ("what kind of
+  // caller") is computed over open + settled, so a caller's TYPE is visible from what they call,
+  // not only from what's resolved.
+  const chainRows = chain.read();
+  const closedRefs = new Set(chainRows.filter((r) => r.entry && r.entry.type === 'close' && r.entry.ref).map((r) => r.entry.ref));
+  const idOf = (e) => (e.signer ? 'key:' + e.signer : 'name:' + e.caller);
+  const open = chainRows.filter((r) => r.entry && r.entry.type === 'open' && r.entry.lane === 'prediction'
+    && idOf(r.entry) === identity && !closedRefs.has(r.entry_hash))
+    .map((r) => ({ market: r.entry.market, side: r.entry.side, size: Number(r.entry.size) || 1, entry: Number(r.entry.entry_ref), seq: r.seq }));
+  const spec = specializationOf([...calls, ...open]);
   return {
-    caller: meta.caller || (rows[0] && rows[0].caller) || identity,
+    caller: meta.caller || (rows[0] && rows[0].caller) || (open[0] && open[0].caller) || identity,
     kind: meta.kind || 'agent', edge: meta.edge, wins: meta.wins, losses: meta.losses,
-    settled: calls.length, lanes: Object.values(lanes), calls,
+    settled: calls.length, lanes: Object.values(lanes), calls, open,
     categories: spec.categories, specialization: spec.specialization,
   };
 }
