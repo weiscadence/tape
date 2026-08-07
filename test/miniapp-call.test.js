@@ -14,7 +14,13 @@ fs.writeFileSync(keyfile, JSON.stringify({ bot_token: TOKEN }));
 process.env.TAPE_DATA = TMP;
 process.env.TAPE_BOT_KEYFILE = keyfile;
 
-const { handleCall } = require('../bin/miniapp');
+const { handleCall, rateLimit, RATE } = require('../bin/miniapp');
+
+// The existing cases drive handleCall back-to-back with one handle, which is exactly what the
+// 3s anti-hammer gap is there to stop. Disabled explicitly for those, and exercised for real in
+// the dedicated cases at the bottom with an injected clock — a limiter tested only through
+// wall-clock sleeps is a limiter nobody runs.
+RATE.minGapMs = 0;
 const { signInitData } = require('../lib/telegram-initdata');
 const { Chain } = require('../lib/chain');
 
@@ -112,6 +118,45 @@ test('a venue with no resolver cannot be called into existence', async () => {
     const { code } = await drive({ initData: goodInit, market: m, side: 'yes', price: 0.42, size: 1 });
     assert.equal(code, 400, `${m} should be refused`);
   }
+});
+
+// ---- rate limit -----------------------------------------------------------------------------
+
+test('the same handle cannot hammer the chain: the min gap holds, then releases', () => {
+  // This file zeroes minGapMs so the handler cases can run back-to-back — which would have
+  // made this test silently vacuous, asserting a gap that had been switched off. Restored for
+  // the duration of the case, and put back after.
+  const saved = RATE.minGapMs;
+  RATE.minGapMs = 3000;
+  try {
+  const t0 = 1_000_000;
+  assert.equal(rateLimit('spammer', t0).ok, true, 'first call is always allowed');
+  const blocked = rateLimit('spammer', t0 + 500);
+  assert.equal(blocked.ok, false);
+  assert.ok(blocked.retry_after_s >= 1, 'a refusal must say when to come back');
+  assert.equal(rateLimit('spammer', t0 + 3000).ok, true, 'allowed again once the gap has passed');
+  } finally { RATE.minGapMs = saved; }
+});
+
+test('an hourly ceiling bounds one identity, and the window really rolls off', () => {
+  const t0 = 2_000_000;
+  for (let i = 0; i < RATE.perHour; i++) {
+    assert.equal(rateLimit('floody', t0 + i * 4000).ok, true, `call ${i} should be allowed`);
+  }
+  const over = rateLimit('floody', t0 + RATE.perHour * 4000 + 4000);
+  assert.equal(over.ok, false, 'the ceiling must actually bite');
+
+  // POSITIVE CONTROL: the limiter is a window, not a permanent ban. Without this, a limiter
+  // that simply blocked forever would pass the test above and lock out real users.
+  assert.equal(rateLimit('floody', t0 + RATE.windowMs + 10_000).ok, true, 'window rolls off');
+});
+
+test('one caller cannot spend another caller\'s budget', () => {
+  // Deliberately per-handle, not global: a global ceiling would turn a spam problem into a
+  // denial-of-service problem where one attacker locks everybody else out.
+  const t0 = 3_000_000;
+  for (let i = 0; i < RATE.perHour + 5; i++) rateLimit('noisy', t0 + i * 4000);
+  assert.equal(rateLimit('quiet-neighbour', t0).ok, true, 'an unrelated caller is unaffected');
 });
 
 test('cleanup', () => { fs.rmSync(TMP, { recursive: true, force: true }); });

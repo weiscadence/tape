@@ -323,6 +323,46 @@ function readBody(req) {
 
 const LIVE_PRICE = (p) => Number.isFinite(p) && p > 0 && p < 1;
 
+// ---- per-caller rate limit ------------------------------------------------------------------
+//
+// WHY (2026-08-07, found while auditing whether strangers could burn our model quota — they
+// cannot, but this hole was sitting next to it). `/api/call` is PUBLIC: nginx proxies it and
+// Telegram loads the app without auth. The initData HMAC proves a real Telegram user is behind
+// a call, which is the right check for identity and no check at all on VOLUME — any Telegram
+// account could append unlimited rows to an append-only chain that by design cannot be pruned.
+// The damage is not a bill, it is the record itself: a board buried under thousands of junk
+// calls is a board nobody can read, and there is no delete.
+//
+// Deliberately per-handle and NOT global. A global ceiling would let one spammer lock everyone
+// else out — trading a spam problem for a denial-of-service problem. Telegram accounts are not
+// free to mint at scale, so bounding each identity is the proportionate control.
+//
+// The numbers are set so a human tapping through the app never sees them: nobody makes a
+// considered prediction every three seconds, and thirty calls in an hour is already far more
+// than the live board offers.
+const RATE = { minGapMs: 3000, perHour: 30, windowMs: 60 * 60 * 1000 };
+const callLog = new Map();   // handle -> [timestamps]
+
+function rateLimit(handle, now = Date.now()) {
+  const hits = (callLog.get(handle) || []).filter((t) => now - t < RATE.windowMs);
+  if (hits.length && now - hits[hits.length - 1] < RATE.minGapMs) {
+    return { ok: false, retry_after_s: Math.ceil((RATE.minGapMs - (now - hits[hits.length - 1])) / 1000),
+      error: 'slow down — one call at a time' };
+  }
+  if (hits.length >= RATE.perHour) {
+    return { ok: false, retry_after_s: Math.ceil((RATE.windowMs - (now - hits[0])) / 1000),
+      error: `that is ${RATE.perHour} calls in an hour — the record is append-only, so take a breath` };
+  }
+  hits.push(now);
+  callLog.set(handle, hits);
+  // The map is keyed by a value a stranger controls, so it must not grow without bound. Handles
+  // whose whole window has aged out are dropped rather than kept as empty arrays.
+  if (callLog.size > 5000) {
+    for (const [k, v] of callLog) if (!v.some((t) => now - t < RATE.windowMs)) callLog.delete(k);
+  }
+  return { ok: true };
+}
+
 async function handleCall(req, res) {
   let body;
   try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
@@ -382,6 +422,13 @@ async function handleCall(req, res) {
   // The title comes from OUR cache of Polymarket's feed, never from the request body — a caller
   // must not be able to choose the words their own receipt renders. It is still an annotation,
   // stamped with a fetch time and marked unsigned everywhere it is shown.
+  // RATE LIMIT GOES HERE, not at the top of the handler. It is budget against the APPEND-ONLY
+  // CHAIN, so it must be spent only by requests that are actually about to write one. Gating
+  // before validation would let a caller burn their own hourly allowance on typos, and would
+  // let a malformed flood lock a legitimate user out of their own quota.
+  const rl = rateLimit(handle);
+  if (!rl.ok) return json(res, 429, { error: rl.error, retry_after_s: rl.retry_after_s });
+
   if (offered && offered.q) { try { recordTitle(market, offered.q); } catch { /* annotation only — never block a call */ } }
 
   let rec;
@@ -463,4 +510,4 @@ if (require.main === module) {
   server.listen(PORT, '127.0.0.1', () => console.log(`tape miniapp on http://127.0.0.1:${PORT}`));
 }
 
-module.exports = { server, handleCall };
+module.exports = { server, handleCall, rateLimit, RATE };
