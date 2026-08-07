@@ -67,7 +67,7 @@ function refreshMarkets() {
 }
 
 // ---- board cache (the real leaderboard artifact, recomputed on an interval) --------------
-let boardCache = { at: 0, data: [] };
+let boardCache = { at: 0, data: [], positions: [] };
 function refreshBoard() {
   const { execFile } = require('child_process');
   execFile('node', [path.join(__dirname, 'leaderboard.js'), '--json'],
@@ -79,13 +79,38 @@ function refreshBoard() {
         boardCache = {
           at: Date.now(),
           data: (art.board || []).map((b) => ({
-            caller: b.caller, edge: b.edge, wins: b.wins, losses: b.losses,
+            caller: b.caller, identity: b.identity, edge: b.edge, wins: b.wins, losses: b.losses,
             open: b.open, kind: b.caller.startsWith('unsigned:') ? 'human'
               : /…|\.\.\./.test(b.caller) ? 'verified' : 'agent',
+          })),
+          // Keep the scored positions so a caller-profile can show a per-call, chain-verifiable
+          // bar chart. Only SCORED rows travel — unresolved/unscored calls are not things "the
+          // chain can be sure about" yet, which is exactly the honesty the product is about.
+          positions: (art.positions || []).filter((p) => p.scoring === 'scored').map((p) => ({
+            identity: p.identity, caller: p.caller, lane: p.lane, market: p.market, side: p.side,
+            pnl: p.pnl, edge: p.edge, close_slot: p.close_slot, seq: p.seq,
           })),
         };
       } catch { /* keep last good */ }
     });
+}
+
+// A caller's chain-verifiable record, grouped by lane, for the profile popup.
+function callerDetail(identity) {
+  const rows = boardCache.positions.filter((p) => p.identity === identity);
+  const meta = boardCache.data.find((b) => b.identity === identity) || {};
+  const lanes = {};
+  const calls = rows.map((p) => {
+    const pnl = Number(p.pnl) || 0;
+    const l = (lanes[p.lane] = lanes[p.lane] || { lane: p.lane, n: 0, wins: 0, pnl: 0 });
+    l.n += 1; l.pnl += pnl; if (pnl > 0) l.wins += 1;
+    return { market: p.market, side: p.side, pnl, edge: Number(p.edge) || 0, won: pnl > 0, seq: p.seq };
+  }).sort((a, b) => a.seq - b.seq);
+  return {
+    caller: meta.caller || (rows[0] && rows[0].caller) || identity,
+    kind: meta.kind || 'agent', edge: meta.edge, wins: meta.wins, losses: meta.losses,
+    settled: calls.length, lanes: Object.values(lanes), calls,
+  };
 }
 
 // ---- helpers -----------------------------------------------------------------------------
@@ -155,6 +180,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/board') {
       return json(res, 200, { at: boardCache.at, board: boardCache.data });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/caller') {
+      const id = u.searchParams.get('identity');
+      if (!id) return json(res, 400, { error: 'identity required' });
+      return json(res, 200, callerDetail(id));
     }
     if (req.method === 'POST' && u.pathname === '/api/call') {
       return await handleCall(req, res);
