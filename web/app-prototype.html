@@ -58,7 +58,6 @@ header{padding:16px 15px 12px}
    Visibility is driven in JS with .hide (display:none!important) so it can't lose a CSS
    specificity fight with the badge styles — that bug showed BOTH states at once. */
 .hide{display:none!important}
-.s-in{display:none}
 body.tg .acct .dot,body.tg .gate .signin .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
 .acct .who b{font-size:14px;display:block}
 .acct .who span{font-size:11px;color:var(--dim)}
@@ -185,12 +184,18 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
   50%{transform:perspective(600px) rotateX(16deg) translateY(-8px)}}
 @media (prefers-reduced-motion:reduce){.gate .mark{animation:none}}
 .gate .tl{margin-top:10px;font-size:12px;letter-spacing:.16em;color:var(--amber);text-transform:uppercase}
-.gate .pitch{margin-top:22px;font-size:14px;line-height:1.65;color:var(--ink);max-width:320px}
-.gate .pitch b{color:var(--amber)}
-.gate .signin{margin-top:26px;display:flex;align-items:center;gap:9px;background:var(--card);
-  border:1px solid var(--line);border-radius:12px;padding:11px 15px}
-.gate .signin .dot{width:9px;height:9px;border-radius:50%;background:var(--dim)}
-.gate .signin span{font-size:13px}.gate .signin b{color:var(--ink)}
+/* schizo/CT-style bullet manifesto — chromatic-glitch text, amber ▸ markers */
+.gate .glist{margin-top:22px;text-align:left;font-weight:800;font-size:17px;line-height:1.95;letter-spacing:.02em}
+.gate .glist div{color:var(--ink);white-space:nowrap;
+  text-shadow:1.4px 0 rgba(224,85,75,.55),-1.4px 0 rgba(107,184,255,.45),0 0 12px rgba(255,176,32,.15)}
+.gate .glist b{color:var(--amber)}
+.gate .glist .m{color:var(--amber);opacity:.85;margin-right:6px;text-shadow:none}
+.gate .signin{margin-top:24px;display:flex;align-items:center;gap:10px;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;padding:11px 16px}
+.gate .signin .dot{width:10px;height:10px;border-radius:50%;background:var(--dim);flex:0 0 10px}
+.gate .signin span{font-size:15px}
+.gate .signin .handle{color:var(--amber);font-size:16px}
+.gate .signin .s-out{font-size:13px;color:var(--dim)}
 .gate .enter{margin-top:18px;background:var(--amber);color:#1a1204;border:0;font:inherit;font-weight:800;
   letter-spacing:.06em;font-size:15px;padding:14px 40px;border-radius:12px;cursor:pointer;
   box-shadow:0 0 30px rgba(255,176,32,.25)}
@@ -204,11 +209,16 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 <div class="gate" id="gate">
   <div class="mark">TAPE</div>
   <div class="tl">keep time, or be kept</div>
-  <div class="pitch">Call the market. It's anchored to <b>Solana</b>, on Solana's clock — so you <b>can't</b> delete a loser or backdate a win. Your record becomes a receipt nobody can edit.</div>
+  <div class="glist">
+    <div><span class="m">&gt;</span> post calls</div>
+    <div><span class="m">&gt;</span> <b>anchored</b> on-chain</div>
+    <div><span class="m">&gt;</span> build a record u <b>can't</b> fake</div>
+    <div><span class="m">&gt;</span> <b>monetize</b> it</div>
+  </div>
   <div class="signin">
     <div class="dot"></div>
-    <span class="s-in">Signed in as <b class="handle">@you</b></span>
-    <span class="s-out">Not signed in — open in Telegram to call</span>
+    <span class="s-in">signed in · <b class="handle">@you</b></span>
+    <span class="s-out">not signed in — open in Telegram</span>
   </div>
   <button class="enter" id="enterBtn">Enter TAPE →</button>
   <div class="fine s-in">Telegram signed you in automatically — no wallet, no password. Verifying a wallet later is optional and never moves funds.</div>
