@@ -358,7 +358,24 @@ async function openCaller(identity){
 async function loadData(){
   try{const r=await fetch('api/markets');MARKETS=(await r.json()).markets||[];}catch(e){}
   try{const r=await fetch('api/board');BOARD=(await r.json()).board||[];}catch(e){}
-  renderMarkets(); renderBoard();
+  renderMarkets(); renderBoard(); renderMe();
+}
+
+// MY RECORD — the signed-in user's own calls, read live from the chain (open bags included).
+async function renderMe(){
+  const el=document.getElementById('melist'); if(!el)return;
+  if(!TG||!INIT){ el.innerHTML='<div class="r"><div class="rk one">◆</div><div class="id"><b>Not signed in</b><span class="bg human">open in Telegram to see your record</span></div><div class="edge flat">—</div></div>'; return; }
+  let d; try{ d=await (await fetch('api/mycalls',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData:INIT})})).json(); }catch(e){ return; }
+  if(!d||!d.handle){ return; }
+  const n=d.calls.length;
+  let html=`<div class="r"><div class="rk one">◆</div><div class="id"><b>@${esc(d.handle)}</b><span class="bg human">HUMAN · TELEGRAM · ${n} CALL${n===1?'':'S'}${d.open?` · ${d.open} OPEN`:''}</span></div><div class="edge flat">—</div></div>`;
+  if(!n){ html+='<div class="r"><div class="id"><span class="bg human">no calls yet — tap a market to make your first</span></div></div>'; }
+  for(const c of d.calls){
+    const px=Math.round(c.entry*100);
+    if(c.status==='open') html+=`<div class="r"><div class="rk">•</div><div class="id"><b>${c.side.toUpperCase()} @ ${px}¢</b><span class="bg human">OPEN · marks to market until you close it</span></div><div class="edge flat">open</div></div>`;
+    else { const cls=c.won?'up':'down'; html+=`<div class="r"><div class="rk">•</div><div class="id"><b>${c.side.toUpperCase()} @ ${px}¢</b><span class="bg ${c.won?'verified':'human'}">${c.won?'WON':'LOST'} · settled</span></div><div class="edge ${cls}">${c.pnl>=0?'+':''}${c.pnl.toFixed(2)}</div></div>`; }
+  }
+  el.innerHTML=html;
 }
 
 document.getElementById('lblist').addEventListener('click',(e)=>{
@@ -370,6 +387,8 @@ document.getElementById('modal').addEventListener('click',(e)=>{ if(e.target.id=
 document.querySelectorAll('nav button').forEach(btn=>btn.onclick=()=>{
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b===btn));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id===btn.dataset.v));
+  if(btn.dataset.v==='me') renderMe();
+  if(btn.dataset.v==='board') loadData();
 });
 
 document.getElementById('mktlist').addEventListener('click', async (e)=>{

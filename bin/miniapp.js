@@ -95,6 +95,27 @@ function refreshBoard() {
     });
 }
 
+// The signed-in user's own calls, read straight from the chain so a just-posted OPEN call
+// shows immediately (the leaderboard cache lags 5 min and only counts settled calls). Open
+// bags are shown as open — the whole point is they don't disappear until they resolve.
+function myCalls(handle) {
+  const rows = chain.read();
+  const byMarket = new Map();
+  for (const r of rows) {
+    const e = r.entry;
+    if (!e || e.caller !== handle || e.lane !== 'prediction') continue;
+    if (e.type === 'open') byMarket.set(e.market, { market: e.market, side: e.side, entry: Number(e.entry_ref), settle: null, ts: e.ts_claimed });
+    else if (e.type === 'amend' && byMarket.has(e.market)) { const p = byMarket.get(e.market); p.side = e.side || p.side; p.entry = Number(e.entry_ref); }
+    else if (e.type === 'close' && byMarket.has(e.market)) byMarket.get(e.market).settle = Number(e.entry_ref);
+  }
+  const calls = [...byMarket.values()].map((p) => {
+    if (p.settle === null) return { ...p, status: 'open' };
+    const win = p.side === 'no' ? 1 - p.settle : p.settle;
+    return { ...p, status: 'settled', won: win > p.entry, pnl: win - p.entry };
+  }).reverse();
+  return { handle, calls, open: calls.filter((c) => c.status === 'open').length, settled: calls.filter((c) => c.status === 'settled').length };
+}
+
 // A caller's chain-verifiable record, grouped by lane, for the profile popup.
 function callerDetail(identity) {
   const rows = boardCache.positions.filter((p) => p.identity === identity);
@@ -188,6 +209,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && u.pathname === '/api/call') {
       return await handleCall(req, res);
+    }
+    if (req.method === 'POST' && u.pathname === '/api/mycalls') {
+      let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
+      const v = verifyInitData(body && body.initData, BOT_TOKEN);
+      if (!v.ok) return json(res, 401, { error: 'unverified', reason: v.reason });
+      const handle = v.user && (v.user.username || `tg${v.user.id}`);
+      return json(res, 200, myCalls(handle));
     }
     return json(res, 404, { error: 'not found' });
   } catch (e) {
