@@ -27,15 +27,16 @@ html,body{margin:0;padding:0;color:var(--ink);
   background-attachment:fixed}
 /* Fullscreen while the loader is up; once you're in, the moving graphic lives only in a
    top band and everything below is solid — per Jiggy's note. */
-/* Loader: the sky sits ABOVE the app (z2) and paints an opaque field, so the whole screen is
-   the constellation with the 3D logo over it. Once you're in, it drops behind (z0) and shrinks
-   to a top band — moving graphic up top, solid below. */
-#sky{position:fixed;inset:0;z-index:2;display:block;transition:height .5s ease}
-body.entered #sky{z-index:0;height:38vh;
+/* The pipes canvas is the background (z0), fullscreen on the loader and a top band once in. */
+#sky{position:fixed;inset:0;z-index:0;display:block;transition:height .5s ease}
+body.entered #sky{height:38vh;
   -webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
-@media (prefers-reduced-motion:reduce){#sky{display:none}}
+@media (prefers-reduced-motion:reduce){#sky{opacity:.5}}
 .phone{position:relative;z-index:1;max-width:440px;margin:0 auto;min-height:100vh;
   display:flex;flex-direction:column}
+/* Until you tap Enter, the app is hidden so nothing bleeds through the loader — the loader is
+   just the solid field + pipes + logo. */
+body:not(.entered) .phone{visibility:hidden}
 
 /* header / wordmark + badge */
 header{padding:16px 15px 12px}
@@ -134,8 +135,9 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 /* login / welcome gate — the first screen when the mini app opens */
 .gate{position:fixed;inset:0;z-index:25;display:flex;flex-direction:column;justify-content:center;
   align-items:center;text-align:center;padding:28px 26px;gap:0;
-  /* the sky (z2) paints the opaque field behind this; gate just adds a vignette for legibility */
-  background:radial-gradient(75% 55% at 50% 42%,transparent,rgba(11,9,6,.72) 92%);
+  /* the pipes canvas is the solid field behind this; gate only adds a soft vignette so the
+     logo + text stay legible over the pipes */
+  background:radial-gradient(70% 50% at 50% 40%,rgba(16,13,9,.35),rgba(16,13,9,.78) 92%);
   transition:opacity .5s,visibility .5s}
 .gate.gone{opacity:0;visibility:hidden;pointer-events:none}
 /* 3D stylized wordmark — amber gradient face + extruded dark shadow stack + a slight tilt */
@@ -319,35 +321,44 @@ if(HANDLE){document.querySelectorAll('.gate .signin b, .acct .who > b')
 
 loadData();
 
-// the constellation sky — lifted from tape.drainfun.xyz so the app matches the site
+// Isometric "Pipes" — the SAME screensaver as tape.drainfun.xyz (web/landing.html), so the app
+// matches the site. Sizes to the canvas's own box (not innerHeight) so it works both fullscreen
+// on the loader and as the top band once you're in.
 (function(){
-  var c=document.getElementById('sky'); if(!c||!c.getContext)return;
-  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
-  var x=c.getContext('2d',{alpha:false}); if(!x)return;
-  var W=0,H=0,dpr=Math.min(window.devicePixelRatio||1,2);
-  var HUES=[36,30,42,28,40],hueAt=0;
-  function poly(n,sp,hue){var p=[];for(var i=0;i<n;i++)p.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()*2-1)*sp,vy:(Math.random()*2-1)*sp});return{pts:p,hist:[],hue:hue};}
-  var shapes=[],mark=null;
-  function build(){W=c.clientWidth;H=c.clientHeight;c.width=Math.max(1,W*dpr);c.height=Math.max(1,H*dpr);
-    x.setTransform(dpr,0,0,dpr,0,0);shapes=[poly(4,1.15,36),poly(4,.85,42)];mark={x:W*.2,y:H*.4,vx:.72,vy:.52,w:0,h:0};}
-  build();
-  var rt;window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(build,200);});
-  var TRAIL=11;
-  function step(s){for(var i=0;i<s.pts.length;i++){var p=s.pts[i];p.x+=p.vx;p.y+=p.vy;
-    if(p.x<0){p.x=0;p.vx*=-1;}if(p.x>W){p.x=W;p.vx*=-1;}if(p.y<0){p.y=0;p.vy*=-1;}if(p.y>H){p.y=H;p.vy*=-1;}}
-    s.hist.push(s.pts.map(function(p){return{x:p.x,y:p.y};}));if(s.hist.length>TRAIL)s.hist.shift();}
-  function draw(s){for(var i=0;i<s.hist.length;i++){var f=s.hist[i],a=(i+1)/s.hist.length;
-    x.strokeStyle='hsla('+(s.hue+i*1.5)+',85%,60%,'+(a*a*0.30)+')';x.lineWidth=1.1;
-    x.beginPath();x.moveTo(f[0].x,f[0].y);for(var j=1;j<f.length;j++)x.lineTo(f[j].x,f[j].y);x.closePath();x.stroke();}}
-  function stepMark(){var size=Math.max(30,Math.min(W*.11,62));x.font='800 '+size+'px ui-monospace,monospace';
-    mark.w=x.measureText('TAPE').width;mark.h=size;mark.x+=mark.vx;mark.y+=mark.vy;var hit=false;
-    if(mark.x<0){mark.x=0;mark.vx*=-1;hit=true;}if(mark.x+mark.w>W){mark.x=W-mark.w;mark.vx*=-1;hit=true;}
-    if(mark.y<mark.h){mark.y=mark.h;mark.vy*=-1;hit=true;}if(mark.y>H){mark.y=H;mark.vy*=-1;hit=true;}
-    if(hit)hueAt=(hueAt+1)%HUES.length;x.fillStyle='hsla('+HUES[hueAt]+',90%,64%,.085)';x.fillText('TAPE',mark.x,mark.y);}
-  var last=0,RATE=1000/30;
-  function loop(t){requestAnimationFrame(loop);if(document.hidden||!W)return;if(t-last<RATE)return;last=t;
-    x.fillStyle='#0b0906';x.fillRect(0,0,W,H);stepMark();for(var i=0;i<shapes.length;i++){step(shapes[i]);draw(shapes[i]);}}
-  requestAnimationFrame(loop);
+  const c=document.getElementById('sky'), x=c.getContext('2d'); if(!x)return;
+  let W,H,DPR;
+  function size(){ DPR=Math.min(2,window.devicePixelRatio||1);
+    const cw=c.clientWidth||innerWidth, ch=c.clientHeight||innerHeight;
+    W=c.width=cw*DPR; H=c.height=ch*DPR;
+    x.fillStyle='#100d09'; x.fillRect(0,0,W,H); }
+  size();
+  const PAL=['#ffb020','#f0902a','#e8dcc0','#cc7a33','#ffcf6b'];
+  const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  function iso(px,py,pz){ const t=26*DPR; return [ W/2 + (px-py)*t, H*0.42 + (px+py)*t*0.5 - pz*t ]; }
+  function Pipe(){ this.reset(); }
+  Pipe.prototype.reset=function(){
+    this.p=[ (Math.random()*10|0)-5, (Math.random()*10|0)-5, (Math.random()*6|0)-1 ];
+    this.d=DIRS[Math.random()*6|0]; this.col=PAL[Math.random()*PAL.length|0];
+    this.life=60+(Math.random()*90|0); this.prev=iso(this.p[0],this.p[1],this.p[2]); };
+  Pipe.prototype.step=function(){
+    if(this.life--<=0){ this.reset(); return; }
+    if(Math.random()<0.28){ let nd; do{ nd=DIRS[Math.random()*6|0]; }while(nd[0]===-this.d[0]&&nd[1]===-this.d[1]&&nd[2]===-this.d[2]); this.d=nd; }
+    this.p=[this.p[0]+this.d[0], this.p[1]+this.d[1], this.p[2]+this.d[2]];
+    if(Math.abs(this.p[0])>16||Math.abs(this.p[1])>16||this.p[2]>9||this.p[2]<-3){ this.reset(); return; }
+    const cur=iso(this.p[0],this.p[1],this.p[2]);
+    x.lineCap='round'; x.lineJoin='round';
+    x.strokeStyle=this.col; x.globalAlpha=0.9; x.lineWidth=7*DPR;
+    x.beginPath(); x.moveTo(this.prev[0],this.prev[1]); x.lineTo(cur[0],cur[1]); x.stroke();
+    x.strokeStyle='rgba(255,255,255,.55)'; x.globalAlpha=0.5; x.lineWidth=2*DPR;
+    x.beginPath(); x.moveTo(this.prev[0],this.prev[1]); x.lineTo(cur[0],cur[1]); x.stroke();
+    x.globalAlpha=0.9; x.fillStyle=this.col;
+    x.beginPath(); x.arc(cur[0],cur[1],4.5*DPR,0,7); x.fill(); x.globalAlpha=1; this.prev=cur; };
+  let pipes=[]; for(let i=0;i<7;i++) pipes.push(new Pipe());
+  function tick(){ x.fillStyle='rgba(16,13,9,0.06)'; x.fillRect(0,0,W,H); for(const p of pipes) p.step(); }
+  const STEP=150; let last=0, live=!matchMedia('(prefers-reduced-motion:reduce)').matches;
+  function loop(t){ if(!live) return; if(!document.hidden && t-last>=STEP){ last=t; tick(); } requestAnimationFrame(loop); }
+  if(live) requestAnimationFrame(loop);
+  let rt; window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(function(){ size(); pipes=[]; for(let i=0;i<7;i++) pipes.push(new Pipe()); },200); });
 })();
 </script>
 </body>
