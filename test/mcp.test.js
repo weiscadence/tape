@@ -293,3 +293,42 @@ test('tape_feed refuses a feed that publishes no signed_fields at all', async ()
   // number that cannot see its own newest input is the failure mode this project is about.
   console.log(`\n${pass} passed, ${tests.length - pass} failed`);
 })();
+
+// ---------------------------------------------------------------------------------------------
+// agent.json's MCP tool list must match the SERVER, not a memory of it.
+//
+// agent.json publishes `mcp.tools` as the index an agent reads to decide what this server can do.
+// That list was maintained by hand, which makes it a copy of another file's contents — and a copy
+// drifts the first time someone adds a tool without thinking to come back. The failure is quiet in
+// the worst direction: a tool that exists but is unadvertised is a capability nobody uses, and an
+// advertised tool that does not exist is a call that errors after an agent planned around it.
+//
+// This reads the real server over the real transport and compares. Sync is now a test result
+// rather than a discipline.
+test('agent.json advertises exactly the tools the MCP server implements', async () => {
+  const { agentDoc } = require('../bin/api.js');
+  const advertised = agentDoc().mcp.tools;
+
+  const c = client();
+  const r = await c.rpc('tools/list');
+  c.close();
+  const actual = r.result.tools.map((t) => t.name);
+
+  const missing = actual.filter((n) => !advertised.includes(n));
+  const phantom = advertised.filter((n) => !actual.includes(n));
+  assert.deepEqual(missing, [], `implemented but not advertised in agent.json: ${missing.join(', ')}`);
+  assert.deepEqual(phantom, [], `advertised in agent.json but not implemented: ${phantom.join(', ')}`);
+});
+
+// NEGATIVE CONTROL: the comparison above is only meaningful if the server actually reports a
+// non-trivial tool list. Two empty arrays are deepEqual, and a broken transport would produce
+// exactly that while the assertion above went green.
+test('the tool list used for the sync check is non-empty and includes the new read tools', async () => {
+  const c = client();
+  const r = await c.rpc('tools/list');
+  c.close();
+  const actual = r.result.tools.map((t) => t.name);
+  assert.ok(actual.length >= 15, `expected a real tool list, got ${actual.length}`);
+  assert.ok(actual.includes('tape_markets'), 'tape_markets missing from the server');
+  assert.ok(actual.includes('tape_scoring'), 'tape_scoring missing from the server');
+});

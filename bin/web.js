@@ -28,6 +28,11 @@ const TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  // text/plain, not text/markdown. The fallback here is application/octet-stream, which would
+  // make the skill DOWNLOAD instead of render — and this URL is linked from the landing page for
+  // humans as well as fetched by agents. text/markdown is the semantically correct answer and the
+  // practically worse one: browsers download it. Agents do not care either way.
+  '.md': 'text/plain; charset=utf-8',
 };
 
 const { ALLOWED, ROOT } = require('../lib/served');

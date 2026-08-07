@@ -325,6 +325,51 @@ const TOOLS = [
     },
   },
   {
+    name: 'tape_markets',
+    description: 'THE MARKETS YOU MAY ACTUALLY CALL ON — call this BEFORE tape_post_call. Returns each '
+      + 'market with the exact `market` string to sign, the venue, the current Yes price and the expiry. '
+      + 'Only markets the scorer can close are listed: that set is strictly smaller than what the venues '
+      + 'offer and cannot be worked out from outside, so a market id you construct yourself is likely to '
+      + 'be refused by the write path or, worse, accepted and never scoreable. Read-only, no key required.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        venue: { type: 'string', description: 'polymarket | hyperliquid. Omit for all venues.' },
+      },
+      additionalProperties: false,
+    },
+    handler: async (a) => {
+      const r = await api(`/markets${a.venue ? `?venue=${encodeURIComponent(a.venue)}` : ''}`);
+      /**
+       * An empty board must never be returned bare. `ready:false` means the first fetch has not
+       * landed yet, which is a startup state; an empty list with `ready:true` means every venue
+       * really is filtered out right now (the daily HIP-4 contracts sit at 0.99/0.01 near expiry
+       * and are dropped by the price band). An agent that cannot tell those apart will either
+       * retry forever or conclude the service is dead.
+       */
+      if (!r.ready) {
+        return { ...r, advice: 'The board has not finished its first fetch. Retry in a few seconds; '
+          + 'this is a startup state, not an empty market list.' };
+      }
+      if (!r.count) {
+        return { ...r, advice: 'No market is callable right now. `venues` carries the counted reason '
+          + 'per venue. This is a real state, not a failure — do not post a constructed market id to '
+          + 'work around it.' };
+      }
+      return r;
+    },
+  },
+  {
+    name: 'tape_scoring',
+    description: 'How calls are judged and what unlocks the right to charge for them (x402): the edge '
+      + 'measure, why win rate is a floor rather than the test, the anti-farm rules, and every tier '
+      + 'threshold. Read this BEFORE designing a calling strategy — several obvious strategies (only '
+      + 'call heavy favourites, post many tiny calls, call one category all day) are specifically '
+      + 'neutralised and will produce a record that never advances. Read-only.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: async () => api('/scoring'),
+  },
+  {
     name: 'tape_read_record',
     description: "Read any caller's public record by their base58 public key: entry counts, how many "
       + 'are still open, how many are anchored, and their first anchored slot (an age nobody can mint). '

@@ -91,3 +91,35 @@ test('lanes are kept apart: one lane cannot inherit another lane record', () => 
   assert.equal(pm.wins, 0, 'the prediction lane must not inherit the software win');
   assert.strictEqual(pm.win_rate, null);
 });
+
+// ---------------------------------------------------------------------------------------------
+// EVERY VENUE THE BOARD OFFERS MUST LAND IN A SCORED LANE.
+//
+// Regression for 2026-08-07: Hyperliquid shipped as a venue and lanes.js was not updated, so
+// HIP-4 calls resolved fine, counted as Crypto for tiers, and still scored `false` on the board.
+// The general assertion is the point — a NEW venue added to the market board without a lane rule
+// fails here rather than shipping as a market that cannot count.
+test('every market-board venue classifies into a scored lane', () => {
+  const samples = {
+    polymarket: 'polymarket:0x60c2c085ee8c16bc8f2419739a94971d4c9d00f637ead10fc0f540afa1be64e8',
+    hyperliquid: 'hyperliquid:1025:BTC:above:64306@2026-08-08T06:00:00Z',
+  };
+  for (const [venue, market] of Object.entries(samples)) {
+    const got = laneOf(market, 'prediction');
+    assert.equal(got.scored, true, `${venue} must be scored, got lane=${got.lane}`);
+    assert.notEqual(got.lane, 'unclassified', `${venue} must not be unclassified`);
+  }
+});
+
+test('hyperliquid lands in crypto-price, agreeing with the mini-app category', () => {
+  const got = laneOf('hyperliquid:1025:BTC:above:64306@2026-08-08T06:00:00Z', 'prediction');
+  assert.equal(got.lane, 'crypto-price');
+});
+
+// NEGATIVE CONTROL: the unclassified default must still work, or the assertion above passes
+// for the trivial reason that everything is scored.
+test('an unknown venue is still unclassified and unscored', () => {
+  const got = laneOf('kalshi-clone:abc123', null);
+  assert.equal(got.lane, 'unclassified');
+  assert.equal(got.scored, false);
+});

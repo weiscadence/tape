@@ -44,6 +44,8 @@ const ed = require('../lib/ed25519');
 const W = require('../lib/windows');
 const A = require('../lib/attest');
 const operator = require('../lib/operator');
+const marketBoard = require('../lib/market-board');
+const { TIERS } = require('../lib/tiers');
 
 // Overridable so the HTTP layer can be exercised against a throwaway chain. Without this
 // the only way to test a write route is to write to the real tape, and a test that dirties
@@ -657,6 +659,15 @@ function agentDoc() {
           + 'A service that offers to sign on your behalf can forge your record.',
     },
     endpoints: {
+      'GET https://tape.drainfun.xyz/api/markets': 'START HERE BEFORE POSTING. The markets you may '
+        + 'actually call on, each with the exact `market` string to sign. Only markets the scorer '
+        + 'can close are listed — that set is strictly smaller than what the venues offer and is '
+        + 'NOT derivable from outside, so a guessed id is refused by the write path. Filter with '
+        + '?venue=polymarket|hyperliquid. `venues` carries per-venue counts and, when a venue is '
+        + 'empty, the counted reason why.',
+      'GET https://tape.drainfun.xyz/api/scoring': 'How you are judged and what unlocks the right to '
+        + 'charge: the edge measure, why win rate is a floor and not the test, the anti-farm rules, '
+        + 'and every tier threshold. Read it BEFORE building a strategy, not after.',
       'POST https://tape.drainfun.xyz/api/call': {
         body: 'a signed entry (see schema). signed only — unsigned is refused.',
         returns: '201 { seq, entry_hash, receipt } — the receipt is our signed acknowledgement, KEEP IT.',
@@ -874,9 +885,19 @@ function agentDoc() {
       server: 'https://tape.drainfun.xyz/tape-mcp.mjs',
       install: 'curl -sO https://tape.drainfun.xyz/tape-mcp.mjs',
       config: { mcpServers: { tape: { command: 'node', args: ['/absolute/path/to/tape-mcp.mjs'] } } },
-      tools: ['tape_whoami', 'tape_keygen', 'tape_post_call', 'tape_verify_receipt', 'tape_read_record',
+      // Kept in sync by test/mcp.test.js, which reads the real server rather than trusting this
+      // list. A hand-maintained index of another file's contents is a list that goes stale the
+      // first time someone adds a tool and does not think to come here.
+      tools: ['tape_whoami', 'tape_keygen', 'tape_markets', 'tape_scoring', 'tape_post_call',
+              'tape_verify_receipt', 'tape_read_record',
               'tape_read_tape', 'tape_get_entry', 'tape_feed', 'tape_integrity', 'tape_windows', 'tape_enroll',
               'tape_questions', 'tape_answer', 'tape_pass', 'tape_agent_spec'],
+      skill: 'https://tape.drainfun.xyz/tape-skill.md — the short version of this whole document, '
+        + 'written to drop into an agent skill directory. Includes the specific mistakes that have '
+        + 'already cost callers a permanent unscoreable row.',
+      start_here: 'tape_markets, then tape_scoring, then tape_post_call. Posting first and reading '
+        + 'the refusal is the expensive order: writes are irreversible and a call on a market the '
+        + 'scorer cannot close is a permanent row that can never count.',
       your_key_stays_yours: 'Generated locally, chmod 600, never transmitted. We cannot sign as you. '
         + 'A service that signs on your behalf can forge your whole record.',
       writes_are_irreversible: 'Every write tool appends to an append-only log anchored to a Solana '
@@ -967,6 +988,88 @@ const server = http.createServer(async (req, res) => {
       }
       if (url.pathname === '/callers') return json(res, 200, callers());
       if (url.pathname === '/attestations') return json(res, 200, attestations());
+      /**
+       * The market INDEX — what you may actually post on.
+       *
+       * Same bug as the epoch index below, found the same way and worth stating separately
+       * because this one had a WRITE path attached. agent.json documented `market` as "a
+       * lane-specific id" and published no list, while the write path refuses any market the
+       * scorer cannot close. So the only way for an agent to discover a valid value was to
+       * guess and read the refusal — and the refusals (400 bad grammar, 502 resolver
+       * unreachable) look like service faults rather than "that market was never callable".
+       *
+       * `market` is the exact string to sign. Not the venue's own id, not the question: the
+       * canonical row signs THIS, and a caller who reconstructs it from parts will produce a
+       * different hash and a signature that verifies against nothing.
+       *
+       * `venues` carries each venue's row count, fetch time and, when a venue is empty, the
+       * counted reason it is empty. An empty list that cannot say why is indistinguishable
+       * from a broken fetch, and an agent that cannot tell those apart will either retry
+       * forever or give up on a working service.
+       */
+      if (url.pathname === '/markets') {
+        const b = marketBoard.snapshot();
+        const venue = url.searchParams.get('venue');
+        const rows = venue ? b.data.filter((m) => m.venue === venue) : b.data;
+        return json(res, 200, {
+          ok: true,
+          at: b.at,
+          // Never served from an empty boot cache without saying so: at=0 means the first
+          // fetch has not landed, which is a different state from "no markets are callable".
+          ready: b.at > 0,
+          count: rows.length,
+          venues: b.venues,
+          filters: {
+            what: 'Only markets the scorer can close are listed. This set is strictly smaller '
+              + 'than what the venues offer, and the difference is not derivable from outside.',
+            binary_yes_no_only: 'Two outcomes that map to yes/no. A market whose outcomes are '
+              + 'two team names cannot be scored and is never offered.',
+            price_band: `${marketBoard.MIN_PRICE}–${marketBoard.MAX_PRICE} — outside it there is `
+              + 'no opinion left to have, and a near-certain call farms a win rate without '
+              + 'adding information.',
+            min_volume_24h_usd: marketBoard.MIN_VOL24,
+            refresh_seconds: marketBoard.DEFAULT_INTERVAL_MS / 1000,
+          },
+          markets: rows,
+        });
+      }
+      /**
+       * How you are judged, before you post rather than after.
+       *
+       * The ladder was computable only by reading lib/tiers.js in the repo. An agent deciding
+       * whether TAPE is worth posting to could see the endpoints and the schema but not the
+       * standard — so "how do I get to charge for calls" had no answer at any URL. Derived
+       * from TIERS rather than restated, because a hand-written copy of a threshold is a
+       * copy that drifts silently the first time the real one moves.
+       */
+      if (url.pathname === '/scoring') {
+        return json(res, 200, {
+          ok: true,
+          headline: 'EDGE is the binding bar, not win rate.',
+          why_not_win_rate: {
+            measured: 'Binomial tails, coin-flipper (p=0.5) vs a genuinely good caller (p=0.6): '
+              + 'n=50 at win>=55% passes 24% of coin-flippers and 77% of good callers; '
+              + 'n=50 at win>=60% passes 10% and 56%. No (n, win%) pair at a workable sample '
+              + 'size both keeps chance out and lets skill in.',
+            farmable: 'Call nothing but 92¢ favourites and you post a 90% record while adding '
+              + 'no information anyone would pay for.',
+            kept_as: 'a visible floor, a screen rather than the test',
+          },
+          edge: 'How much you beat the price you actually took, size-weighted. It is the only '
+            + 'number that knows what the market thought when you called it.',
+          anti_farm: [
+            'DISTINCT DAYS, not calls — sixty calls on one night of baseball is one opinion.',
+            'STAKED UNITS, not call count — fractional sizing would farm the count risk-free.',
+            'NO SINGLE CATEGORY OVER 70% — otherwise the ladder certifies "calls one league".',
+            'OPEN CALLS COUNT ZERO — an unclosed position earns no progress.',
+          ],
+          decay: 'Everything is computed over a trailing 180-day window. The right to charge is '
+            + 'a thing you keep holding, not a thing you won once.',
+          tiers: TIERS.map((t) => ({ key: t.key, name: t.name, mark: t.mark, unlocks: t.unlocks, requires: t.req })),
+          check_your_own: 'GET /caller/<signer> returns your standing. lib/tiers.js is a pure '
+            + 'function with no I/O, so you can recompute the same answer from your own calls.',
+        });
+      }
       // The epoch INDEX. Without it an agent has to already know an epoch name to ask about
       // one, and there was nowhere to learn a name — every window route was keyed by an
       // identifier we published nowhere. A mechanism you can only use if you already know
@@ -1149,6 +1252,9 @@ module.exports = { intakeReceipt, agentDoc };
 // Only bind when run as a program. Requiring this file (the tests do, so they sign with
 // the real producer) must not race the live service for the port.
 if (require.main === module) {
+  // Started here, not at require time: a module that polls third-party APIs merely because it
+  // was required would make every test that imports this file do live network I/O.
+  marketBoard.start();
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`tape intake on 127.0.0.1:${PORT}; receipts signed by ${receiptPub || 'NOBODY (no key)'}`);
   });

@@ -21,7 +21,6 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 const { verifyInitData } = require('../lib/telegram-initdata');
 const { buildEntry, newNonce } = require('../lib/entry');
 const { Chain } = require('../lib/chain');
@@ -30,9 +29,9 @@ const { recordTitle } = require('../lib/market-titles');
 const { buildReceipt } = require('./receipt');
 const { plainReceipt } = require('../lib/receipt-plain');
 const { standing } = require('../lib/tiers');
-const { fetchMarkets: hlMarkets, SETTLEABLE: HL_SETTLEABLE } = require('../lib/hyperliquid');
-// Reused, not reimplemented: the CLI picker's binary test is the one the gate agrees with.
-const { isBinaryYesNo } = require('./markets');
+// SETTLEABLE only — the market FETCHING moved to lib/market-board.js. This still needs the
+// settleable-asset list because the write-path validator derives its grammar from it.
+const { SETTLEABLE: HL_SETTLEABLE } = require('../lib/hyperliquid');
 
 const PORT = Number(process.env.TAPE_MINIAPP_PORT || 3219);
 const APP_HTML = path.join(__dirname, '..', 'web', 'app-prototype.html');
@@ -47,107 +46,15 @@ const BOT_TOKEN = (() => {
 const MAX_BODY = 8 * 1024;
 const chain = new Chain(path.join(DATA, 'tape.jsonl'));
 
-// ---- markets cache (live, multi-venue, refreshed on an interval) -------------------------
+// ---- markets cache (live, multi-venue) ---------------------------------------------------
 //
-// TWO VENUES, ONE CACHE, AND EACH ROW SAYS WHICH (2026-08-07). Every cached row now carries
-// a fully venue-qualified `market` id and a `venue` tag. That is not decoration: the write
-// path signs the venue-qualified id, so a row that only knew its Polymarket conditionId
-// could never have produced a callable Hyperliquid entry. `id` is kept alongside for the
-// Polymarket rows the older read paths still key on.
-//
-// A VENUE THAT FAILS MUST NOT TAKE THE OTHER DOWN WITH IT. The two fetches are independent
-// and each keeps its own last-good slice, so Polymarket going dark leaves the Hyperliquid
-// tab live (and vice versa) instead of emptying the whole board — the failure that would
-// otherwise read to a user as "TAPE is broken" when one third-party API blipped.
-let marketsCache = { at: 0, data: [], venues: {} };
-
-/** Merge one venue's rows into the cache, replacing only that venue's slice. */
-function commitVenue(venue, rows, note) {
-  const others = marketsCache.data.filter((r) => r.venue !== venue);
-  marketsCache = {
-    at: Date.now(),
-    data: others.concat(rows),
-    venues: Object.assign({}, marketsCache.venues, { [venue]: { at: Date.now(), count: rows.length, note: note || null } }),
-  };
-}
-
-function refreshPolymarket() {
-  const url = 'https://gamma-api.polymarket.com/markets?closed=false&active=true&order=volume24hr&ascending=false&limit=60';
-  https.get(url, (r) => {
-    let buf = '';
-    r.on('data', (c) => { buf += c; if (buf.length > 4e6) r.destroy(); });
-    r.on('end', () => {
-      try {
-        const rows = JSON.parse(buf);
-        const out = [];
-        for (const m of (Array.isArray(rows) ? rows : rows.data || [])) {
-          if (!m.question) continue;
-          // ONLY WHAT THE SCORER CAN CLOSE. bin/markets.js (the CLI picker) has always
-          // enforced this; the mini-app never did, and it was not theoretical — Jiggy's own
-          // receipt #386 ("Chicago White Sox vs. Boston Red Sox", YES at 82¢) is EXCLUDED
-          // from ranking forever, because that market's outcomes are two team names and the
-          // gate cannot map them to a yes/no side. Two of the five excluded rows on the live
-          // board today are exactly this. The tap felt identical to a real call, produced a
-          // real receipt, and can never score. Five such markets are in today's top slice.
-          if (!isBinaryYesNo(m)) continue;
-          let yes = null;
-          try { yes = Number((typeof m.outcomePrices === 'string' ? JSON.parse(m.outcomePrices) : m.outcomePrices)[0]); } catch { /**/ }
-          if (!(yes >= 0.06 && yes <= 0.94)) continue;
-          const v = Number(m.volume24hr) || 0;
-          if (v < 50000) continue;
-          out.push({
-            venue: 'polymarket',
-            market: `polymarket:${m.conditionId}`,
-            q: m.question,
-            yes: Math.round(yes * 100) / 100,
-            vol24: Math.round(v),
-            id: m.conditionId,
-            ends: m.endDate || null,
-          });
-        }
-        commitVenue('polymarket', out.slice(0, 24));
-      } catch (e) { /* keep the last good slice */ }
-    });
-  }).on('error', () => { /* keep the last good slice */ });
-}
-
-function refreshHyperliquid() {
-  hlMarkets().then(({ rows, stats }) => {
-    const out = rows.map((r) => ({
-      venue: 'hyperliquid',
-      market: r.market,
-      q: r.question,
-      yes: Math.round(Number(r.yes) * 100) / 100,
-      // HIP-4 does not publish a 24h notional per outcome on the info endpoint, and inventing
-      // one would put a fabricated number on a receipt. The UI renders the expiry instead.
-      vol24: null,
-      ends: r.ends,
-    }));
-    // An empty Hyperliquid tab is a real state most of the day — the daily contracts sit at
-    // 0.99/0.01 near expiry and get filtered by the same "no opinion left to have" band as
-    // Polymarket. The note makes an empty tab say WHY, so it never reads as a broken fetch.
-    //
-    // EVERY ROW READ MUST BE ACCOUNTED FOR. A first cut listed only three drop reasons and
-    // printed "8 read · 3 priced out · 1 no feed" — four rows unexplained, which is exactly
-    // the ambiguous silence the counted-filter rule exists to prevent. If the reasons ever
-    // stop summing to `read`, the remainder is shown rather than hidden.
-    const named = stats.dropped_priced_out + stats.dropped_no_feed
-      + stats.dropped_expired + stats.dropped_not_binary + stats.dropped_no_price;
-    const parts = [
-      `${stats.read} outcome markets read`,
-      `${stats.dropped_priced_out} priced outside the band`,
-      `${stats.dropped_no_feed} on assets we cannot settle`,
-      `${stats.dropped_not_binary} not binary Yes/No`,
-      `${stats.dropped_expired} past expiry`,
-    ];
-    if (stats.dropped_no_price) parts.push(`${stats.dropped_no_price} with no live price`);
-    if (named !== stats.read) parts.push(`${stats.read - named} unaccounted for`);
-    const note = out.length ? null : parts.join(' · ');
-    commitVenue('hyperliquid', out, note);
-  }).catch(() => { /* keep the last good slice */ });
-}
-
-function refreshMarkets() { refreshPolymarket(); refreshHyperliquid(); }
+// MOVED TO lib/market-board.js (2026-08-07). This logic used to live here, which is exactly why
+// the public agent API had no market list: discovery was a mini-app feature rather than a
+// protocol one. Both servers now build the board from the same module, so the markets an agent
+// reads over /api/markets are byte-identical to the ones this app renders — a divergence here
+// would let the app offer a market the API called uncallable.
+const board = require('../lib/market-board');
+function refreshMarkets() { board.refresh(); }
 
 // ---- display names -----------------------------------------------------------------------
 //
@@ -220,7 +127,7 @@ function loadTitles() { try { TITLES = JSON.parse(fs.readFileSync(path.join(DATA
 loadTitles(); setInterval(loadTitles, 5 * 60 * 1000).unref();
 function titleOf(m) {
   if (TITLES[m] && TITLES[m].title) return TITLES[m].title;
-  const c = marketsCache.data.find((x) => x.market === m);
+  const c = board.find(m);
   if (c) return c.q;
   if (m.startsWith('github:')) return m.replace('github:', '').split(':')[0];
   return m.replace(/^(pyth|demo|delphi|polymarket|hyperliquid):/, '').slice(0, 40);
@@ -412,7 +319,7 @@ async function handleCall(req, res) {
     if (!isFinite(ends)) return json(res, 400, { error: 'market expiry is unparseable' });
     if (ends <= Date.now()) return json(res, 400, { error: 'that market has already expired' });
   }
-  const offered = marketsCache.data.find((x) => x.market === market);
+  const offered = board.find(market);
   if (side !== 'yes' && side !== 'no') return json(res, 400, { error: 'side must be yes|no' });
   const p = Number(price);
   if (!LIVE_PRICE(p)) return json(res, 400, { error: 'price must be between 0 and 1' });
@@ -470,7 +377,8 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
     if (req.method === 'GET' && u.pathname === '/api/markets') {
-      return json(res, 200, { at: marketsCache.at, markets: marketsCache.data, venues: marketsCache.venues });
+      const b = board.snapshot();
+      return json(res, 200, { at: b.at, markets: b.data, venues: b.venues });
     }
     if (req.method === 'GET' && u.pathname === '/api/board') {
       return json(res, 200, { at: boardCache.at, board: boardCache.data });
