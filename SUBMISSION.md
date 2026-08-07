@@ -167,7 +167,7 @@ unnecessary WASM."* Anchoring a Merkle root in a memo transaction is a tier 1 pr
 | Take calls where humans/agents already are | Telegram channel (`channels.telegram`) | **live, paired** |
 | Let a human pick a market without typing a 66-char id | skill tool `tape_markets` (numbered menu, live prices) | **live** |
 | Post / anchor / receipt / verify as agent tools | skill bundle (5 tools, `skills audit` passes) | **live** |
-| Mark every interval without being asked | declarative shell cron job, `*/15 * * * *` | **live** |
+| Mark every interval without being asked | declarative shell cron job, `*/5 * * * *` | **live** |
 | Deterministic marking pipeline for the agent path | SOP `tape-anchor` (`sop validate` passes) | built |
 | Positions survive restart | append-only chain on disk + Solana | **live** |
 
@@ -244,7 +244,7 @@ Twelve attacks, their closures, and the residuals we did **not** close:
 
 ```bash
 # 1. the record library + verifier (Node, no build step)
-cd projects/tape && npm ci
+cd tape && npm ci
 node test/spine.test.js                 # 23 tests, 8 negative controls
 node test/signing-policy.test.js        # 17 tests: the fund-safety gate + fee caps
 node bounty/prompt-injection-test.js    # the required injection test → FAILS CLOSED
@@ -253,7 +253,7 @@ node verify/controls.mjs <receipt>      # 10 verifier controls vs mainnet
 # 2. on ZeroClaw v0.8.3 (stock binary, checksum-verified)
 zeroclaw skills audit  ~/.zeroclaw/shared/skills/tape/tape   # passes
 zeroclaw sop validate                                        # tape-anchor: valid
-zeroclaw cron list                                           # tape-anchor */15
+zeroclaw cron list                                           # tape-anchor */5
 zeroclaw agent -a tape -m "what can I call right now?"          # the numbered market menu
 zeroclaw agent -a tape -m "verify /tmp/tape-latest-receipt.json"
 

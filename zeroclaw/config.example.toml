@@ -47,11 +47,15 @@ default_execution_mode = "deterministic"
 [cron.tape-anchor]
 name = "TAPE interval anchor"
 job_type = "shell"
-command = "node /ABSOLUTE/PATH/projects/tape/bin/daemon.js --once"
+command = "node /ABSOLUTE/PATH/tape/bin/daemon.js --once"
 enabled = true
 [cron.tape-anchor.schedule]
 kind = "cron"
-expr = "*/15 * * * *"
+# Must match the live job. This read */15 while production ran */5, which mattered more than
+# a stale comment usually does: the write-up invites the reader to check that anchors land on
+# the five-minute grid, and a reader who reproduced from THIS file would have generated a tape
+# that failed our own invited check and looked like we had lied about the cutover.
+expr = "*/5 * * * *"
 tz = "UTC"
 
 # --- channel --------------------------------------------------------------------

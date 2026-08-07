@@ -265,8 +265,64 @@ sequence *of anchors*, so nothing compared anchor N to anchor N+1 (Specie, Colon
 **every** historical root from its own current contents. `--rpc` reads those roots from
 Solana rather than from our own anchor file.
 
-Live: **CONTINUOUS, 26 of 26.** Exercised in each failing state first — a deleted entry, one
-edited field, and a truncated tape all print `REWRITTEN` and exit 1.
+Exercised in each failing state first — a deleted entry, one edited field, and a truncated
+tape all print `REWRITTEN` and exit 1.
+
+**Live, and this is the uncomfortable part: `REWRITTEN — 1 of 1997`.** This section used to
+read "CONTINUOUS, 26 of 26" and that is no longer true. One anchored root does not reproduce
+from today's tape, permanently, and the reason is worth more than the clean number was:
+
+On 2026-08-06 a staging smoke test wrote a junk row into the **production** tape at
+`seq 333` — the hardcoded-data-dir bug that `lib/datadir.js` exists to end (changelog #1102).
+We deleted the row and recorded that we had "removed it pre-anchor". We had not. The anchorer
+committed it **20 seconds** after it was written:
+
+| | |
+|---|---|
+| junk row written | `2026-08-06T01:39:01.272Z` |
+| anchored anyway | `2026-08-06T01:39:21Z`, slot `437491301`, root `f0425ccd…`, `n:334` |
+| removed from the tape | seconds later, backed up to `data/_removed-smoke-row-2026-08-06.jsonl` |
+
+So a root on Solana commits 334 entries, and the tape now serves 333 in that range. That
+divergence **cannot be repaired.** Restoring the row would renumber every entry after it and
+break the ~1,600 roots anchored since; the honest state is a permanent, disclosed hole.
+
+Two things follow, and both are the actual point of this project:
+
+1. **The mechanism worked on its author.** We wrote "pre-anchor" in good faith and were wrong
+   by 20 seconds. No amount of care at the keyboard would have caught that — the chain caught
+   it, months of it later, because a cumulative root cannot be talked out of what it committed.
+   A record you can edit would have absorbed this silently.
+2. **The verifier is not taught to forgive it.** There is no whitelist for this root and there
+   will not be one. `tape-history.mjs` reports `REWRITTEN` and exits 1, on our own tape, every
+   run — including from a fresh clone. A checker that greenlights the one failure its author
+   actually caused is decoration. If you run it and see this, it is not a bug in the tool.
+
+The removed row's exact bytes are published in `data/_removed-smoke-row-2026-08-06.jsonl`, so
+you can confirm that account rather than accept it. This rebuilds the tree both ways and says
+which one the chain agrees with:
+
+```
+node verify/tape-divergence.mjs data/tape.jsonl \
+  data/_removed-smoke-row-2026-08-06.jsonl \
+  f0425ccd904a28a8b4149e03d3b167308b60f47d9adc04a58ee00efce667ba08
+```
+
+```
+rebuilt from tape as-served   bfecdf49…  does not match
+rebuilt WITH removed seq 333  f0425ccd…  MATCHES the anchored root
+EXPLAINED — the anchored root reproduces only with the removed row present.
+The missing entry is seq 333: type=open caller=smoke-test market=smoke-market
+```
+
+It can say otherwise, which is the only reason its agreement is worth anything: pointed at a
+root that is fine it prints `NOT A DELETION`, and handed a row that does not account for the
+gap it prints `UNEXPLAINED` and refuses to endorse the story. Both exit 1.
+
+**Scope, so this is not read as worse than it is:** one root. `1996 of 1997` still reproduce,
+including every root anchored after the incident — the tape has been append-only since, and
+the same command run against a later anchor reproduces it exactly. This is a single
+20-second window on 2026-08-06, permanently visible, not an ongoing condition.
 
 Its first draft falsely accused us twice: it duplicated the odd Merkle tail (this tree
 *promotes* it) and hand-built the link preimage instead of canonicalizing it — 23 of 26

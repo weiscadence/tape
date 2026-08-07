@@ -236,78 +236,14 @@ function getJson(url, timeoutMs = 12000) {
   });
 }
 
-function postRpc(url, body, timeoutMs = 12000) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url);
-    const req = https.request({ host: u.host, path: u.pathname + u.search, method: 'POST',
-      headers: { 'Content-Type': 'application/json' } }, (res) => {
-      let b = ''; res.on('data', (d) => { b += d; });
-      res.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
-    });
-    req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));
-    req.on('error', reject);
-    req.end(JSON.stringify(body));
-  });
-}
-
-/**
- * What an anchor actually costs, and how fast we spend them — read off the anchor log
- * rather than assumed. Returns null when there is nothing to measure, because a runway
- * computed from no data is a guess wearing a number's clothes, and the caller should say
- * so out loud instead of printing a confident hour count.
- *
- * `lamports` is the median, not the mean: one retried or congested anchor at 10x should
- * not move the runway estimate the operator is about to make a funding decision on.
- */
-function observedAnchorBurn(windowHours = 24) {
-  const { DATA_DIR } = require('../lib/datadir');
-  const file = path.join(DATA_DIR, 'anchors.jsonl');
-  if (!fs.existsSync(file)) return null;
-  const cutoff = Date.now() / 1000 - windowHours * 3600;
-  const costs = [];
-  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    if (!line.trim()) continue;
-    let r; try { r = JSON.parse(line); } catch { continue; }
-    if (!(r.blockTime > cutoff) || !(r.lamports > 0)) continue;
-    costs.push(r.lamports);
-  }
-  if (!costs.length) return null;
-  costs.sort((a, b) => a - b);
-  return {
-    lamports: costs[Math.floor(costs.length / 2)],
-    perHour: costs.length / windowHours,
-    n: costs.length,
-  };
-}
-
-/**
- * Who paid for the most recent anchor, according to Solana. Account 0 of a transaction's
- * message is the fee payer, so this is the chain's own answer to "which wallet is funding
- * this tape", independent of whatever key this process happened to resolve.
- *
- * Returns null when it cannot tell — no anchors yet, or the RPC would not answer. A null
- * means "unknown", and the caller must not read it as "matches".
- */
-async function observedAnchorPayer(url) {
-  const { DATA_DIR } = require('../lib/datadir');
-  const file = path.join(DATA_DIR, 'anchors.jsonl');
-  if (!fs.existsSync(file)) return null;
-  const lines = fs.readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
-  for (let i = lines.length - 1; i >= 0 && i > lines.length - 5; i--) {
-    let sig; try { sig = JSON.parse(lines[i]).signature; } catch { continue; }
-    if (!sig) continue;
-    try {
-      const r = await postRpc(url, { jsonrpc: '2.0', id: 1, method: 'getTransaction',
-        params: [sig, { encoding: 'json', maxSupportedTransactionVersion: 0 }] });
-      const keys = r.result && r.result.transaction && r.result.transaction.message.accountKeys;
-      if (keys && keys.length) return keys[0];
-    } catch { /* try the one before it */ }
-  }
-  return null;
-}
+// Burn/payer/runway measurement is shared with the SCHEDULED watcher
+// (scripts/tape-health.js) rather than duplicated. See lib/anchor-burn.js for why: two
+// implementations of "what does an anchor cost" is how the old hardcoded fee constant
+// drifted 2.8x without anything noticing.
+const { postRpc, observedAnchorBurn, observedAnchorPayer, rpcUrl } = require('../lib/anchor-burn');
 
 async function checkRpcAndBalance(anchorPub) {
-  const url = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+  const url = rpcUrl();
   let slot;
   try {
     const r = await postRpc(url, { jsonrpc: '2.0', id: 1, method: 'getSlot' });
