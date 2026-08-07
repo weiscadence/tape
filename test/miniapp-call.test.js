@@ -159,4 +159,24 @@ test('one caller cannot spend another caller\'s budget', () => {
   assert.equal(rateLimit('quiet-neighbour', t0).ok, true, 'an unrelated caller is unaffected');
 });
 
+// ---- the picker must only offer what the gate can close -------------------------------------
+
+test('team-name outcomes are not offerable — this one already cost a real call', () => {
+  // Receipt #386 ("Chicago White Sox vs. Boston Red Sox", YES at 82¢) was made through the
+  // mini-app and is EXCLUDED from ranking forever: the gate cannot map two team names to a
+  // yes/no side. The CLI picker always enforced this; the mini-app fetch did not.
+  const { isBinaryYesNo } = require('../bin/markets');
+
+  assert.equal(isBinaryYesNo({ outcomes: '["Yes","No"]' }), true);
+  assert.equal(isBinaryYesNo({ outcomes: ['Yes', 'No'] }), true);
+
+  assert.equal(isBinaryYesNo({ outcomes: '["Chicago White Sox","Boston Red Sox"]' }), false);
+  assert.equal(isBinaryYesNo({ outcomes: '["Up","Down"]' }), false, 'Up/Down is binary but not yes/no-mappable');
+  assert.equal(isBinaryYesNo({ outcomes: '["Yes","No","Maybe"]' }), false);
+  // NEGATIVE CONTROL: a malformed field must drop the market, not throw inside the filter and
+  // read to a user as "the venue has no markets".
+  assert.equal(isBinaryYesNo({ outcomes: 'not json' }), false);
+  assert.equal(isBinaryYesNo({}), false);
+});
+
 test('cleanup', () => { fs.rmSync(TMP, { recursive: true, force: true }); });

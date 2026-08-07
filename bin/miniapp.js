@@ -31,6 +31,8 @@ const { buildReceipt } = require('./receipt');
 const { plainReceipt } = require('../lib/receipt-plain');
 const { standing } = require('../lib/tiers');
 const { fetchMarkets: hlMarkets, SETTLEABLE: HL_SETTLEABLE } = require('../lib/hyperliquid');
+// Reused, not reimplemented: the CLI picker's binary test is the one the gate agrees with.
+const { isBinaryYesNo } = require('./markets');
 
 const PORT = Number(process.env.TAPE_MINIAPP_PORT || 3219);
 const APP_HTML = path.join(__dirname, '..', 'web', 'app-prototype.html');
@@ -80,6 +82,14 @@ function refreshPolymarket() {
         const out = [];
         for (const m of (Array.isArray(rows) ? rows : rows.data || [])) {
           if (!m.question) continue;
+          // ONLY WHAT THE SCORER CAN CLOSE. bin/markets.js (the CLI picker) has always
+          // enforced this; the mini-app never did, and it was not theoretical — Jiggy's own
+          // receipt #386 ("Chicago White Sox vs. Boston Red Sox", YES at 82¢) is EXCLUDED
+          // from ranking forever, because that market's outcomes are two team names and the
+          // gate cannot map them to a yes/no side. Two of the five excluded rows on the live
+          // board today are exactly this. The tap felt identical to a real call, produced a
+          // real receipt, and can never score. Five such markets are in today's top slice.
+          if (!isBinaryYesNo(m)) continue;
           let yes = null;
           try { yes = Number((typeof m.outcomePrices === 'string' ? JSON.parse(m.outcomePrices) : m.outcomePrices)[0]); } catch { /**/ }
           if (!(yes >= 0.06 && yes <= 0.94)) continue;
