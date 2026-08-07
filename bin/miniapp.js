@@ -137,7 +137,7 @@ function myCalls(handle) {
   for (const r of rows) {
     const e = r.entry;
     if (!e || e.caller !== handle || e.lane !== 'prediction') continue;
-    if (e.type === 'open') byMarket.set(e.market, { market: e.market, side: e.side, entry: Number(e.entry_ref), settle: null, ts: e.ts_claimed });
+    if (e.type === 'open') byMarket.set(e.market, { market: e.market, side: e.side, entry: Number(e.entry_ref), size: Number(e.size) || 1, seq: r.seq, settle: null, ts: e.ts_claimed });
     else if (e.type === 'amend' && byMarket.has(e.market)) { const p = byMarket.get(e.market); p.side = e.side || p.side; p.entry = Number(e.entry_ref); }
     else if (e.type === 'close' && byMarket.has(e.market)) byMarket.get(e.market).settle = Number(e.entry_ref);
   }
@@ -190,7 +190,7 @@ const LIVE_PRICE = (p) => Number.isFinite(p) && p > 0 && p < 1;
 async function handleCall(req, res) {
   let body;
   try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad json' }); }
-  const { initData, market, side, price } = body || {};
+  const { initData, market, side, price, size } = body || {};
 
   const v = verifyInitData(initData, BOT_TOKEN);
   if (!v.ok) return json(res, 401, { error: 'unverified', reason: v.reason });
@@ -203,6 +203,10 @@ async function handleCall(req, res) {
   if (side !== 'yes' && side !== 'no') return json(res, 400, { error: 'side must be yes|no' });
   const p = Number(price);
   if (!LIVE_PRICE(p)) return json(res, 400, { error: 'price must be between 0 and 1' });
+  // Size is the conviction/stake in units — a required, deliberate choice so a call is never a
+  // careless one-tap, and so the record carries how much someone stood behind each call.
+  const units = Math.round(Number(size));
+  if (!Number.isFinite(units) || units < 1 || units > 1000) return json(res, 400, { error: 'size must be 1–1000 units' });
 
   let rec;
   try {
@@ -212,7 +216,7 @@ async function handleCall(req, res) {
       lane: 'prediction',
       market,
       side,
-      size: '1',
+      size: String(units),
       entry_ref: p.toFixed(4),
       ts_claimed: new Date().toISOString(),
       nonce: newNonce(),

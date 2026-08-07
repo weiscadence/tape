@@ -90,6 +90,16 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 .mkt .row button.no.pick{background:var(--red);border-color:var(--red);color:#1a0303}
 .mkt.called{opacity:.5}
 .mkt .ct{display:none;color:var(--green);font-size:11px;font-weight:700;margin-top:9px;letter-spacing:.04em}
+/* size picker (step 2 of a call) */
+.mkt .size{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}
+.mkt .size .sl{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-right:2px}
+.mkt .size button[data-u]{background:rgba(255,255,255,.02);border:1px solid var(--line);color:var(--dim);
+  border-radius:8px;padding:7px 11px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.mkt .size button[data-u].on{border-color:var(--amber);color:var(--amber);background:rgba(255,176,32,.08)}
+.mkt .size .confirm{flex:1 0 100%;margin-top:4px;background:var(--amber);border:0;color:#1a1204;
+  border-radius:10px;padding:12px;font:inherit;font-weight:800;font-size:13.5px;letter-spacing:.04em;cursor:pointer}
+.mkt .size .confirm:disabled{opacity:.6}
+.r.rc{cursor:pointer}
 .mkt.called .ct{display:block}
 
 /* leaderboard — ticket card */
@@ -390,12 +400,20 @@ async function renderMe(){
   let html=`<div class="r"><div class="rk one">◆</div><div class="id"><b>@${esc(d.handle)}</b><span class="bg human">HUMAN · TELEGRAM · ${n} CALL${n===1?'':'S'}${d.open?` · ${d.open} OPEN`:''}</span></div><div class="edge flat">—</div></div>`;
   if(!n){ html+='<div class="r"><div class="id"><span class="bg human">no calls yet — tap a market to make your first</span></div></div>'; }
   for(const c of d.calls){
-    const px=Math.round(c.entry*100);
-    if(c.status==='open') html+=`<div class="r"><div class="rk">•</div><div class="id"><b>${c.side.toUpperCase()} @ ${px}¢</b><span class="bg human">OPEN · marks to market until you close it</span></div><div class="edge flat">open</div></div>`;
-    else { const cls=c.won?'up':'down'; html+=`<div class="r"><div class="rk">•</div><div class="id"><b>${c.side.toUpperCase()} @ ${px}¢</b><span class="bg ${c.won?'verified':'human'}">${c.won?'WON':'LOST'} · settled</span></div><div class="edge ${cls}">${c.pnl>=0?'+':''}${c.pnl.toFixed(2)}</div></div>`; }
+    const px=Math.round(c.entry*100), u=c.size||1;
+    const rcpt=c.seq!=null?` data-seq="${c.seq}"`:'';
+    if(c.status==='open') html+=`<div class="r rc"${rcpt}><div class="rk">•</div><div class="id"><b>${c.side.toUpperCase()} @ ${px}¢ · ${u}u</b><span class="bg human">OPEN · ${esc(c.category||'')} · tap for receipt ↗</span></div><div class="edge flat">open</div></div>`;
+    else { const cls=c.won?'up':'down'; html+=`<div class="r rc"${rcpt}><div class="rk">•</div><div class="id"><b>${c.side.toUpperCase()} @ ${px}¢ · ${u}u</b><span class="bg ${c.won?'verified':'human'}">${c.won?'WON':'LOST'} · ${esc(c.category||'')} · receipt ↗</span></div><div class="edge ${cls}">${c.pnl>=0?'+':''}${c.pnl.toFixed(2)}</div></div>`; }
   }
   el.innerHTML=html;
 }
+
+// Tap a call on MY RECORD → open its on-chain receipt.
+document.getElementById('melist').addEventListener('click',(e)=>{
+  const r=e.target.closest('.rc'); if(!r||!r.dataset.seq)return;
+  const url='https://tape.drainfun.xyz/r/'+r.dataset.seq;
+  if(TG&&TG.openLink) TG.openLink(url); else window.open(url,'_blank');
+});
 
 document.getElementById('lblist').addEventListener('click',(e)=>{
   const r=e.target.closest('.r.tap'); if(!r||!r.dataset.id)return; openCaller(r.dataset.id);
@@ -410,22 +428,44 @@ document.querySelectorAll('nav button').forEach(btn=>btn.onclick=()=>{
   if(btn.dataset.v==='board') loadData();
 });
 
+// Two-step call: pick a side → choose size (units) → confirm. Size is required so a call is
+// a deliberate act, and so the record carries how much conviction stood behind it.
 document.getElementById('mktlist').addEventListener('click', async (e)=>{
-  const btn=e.target.closest('button[data-side]');if(!btn)return;
-  const card=btn.closest('.mkt');if(card.classList.contains('called'))return;
+  const card=e.target.closest('.mkt'); if(!card||card.classList.contains('called'))return;
   const m=MARKETS[Number(card.dataset.i)]; if(!m) return;
-  if(!TG||!INIT){toast('Open TAPE inside Telegram to make a real call.',false);return;}
-  const price = btn.dataset.side==='yes' ? m.yes : (1-m.yes);
-  btn.classList.add('pick');
-  try{
-    const r=await fetch('api/call',{method:'POST',headers:{'content-type':'application/json'},
-      body:JSON.stringify({initData:INIT, market:'polymarket:'+m.id, side:btn.dataset.side, price})});
-    const d=await r.json();
-    if(d.ok){card.classList.add('called');
-      toast(`Called ${btn.dataset.side.toUpperCase()} · on the tape as seq ${d.seq}<span class="sig">${d.caller} · anchors next cycle</span>`,true);
-      loadData();
-    } else { btn.classList.remove('pick'); toast('Refused: '+(d.reason||d.error),false); }
-  }catch(err){ btn.classList.remove('pick'); toast('Network error — try again',false); }
+
+  const side=e.target.closest('button[data-side]');
+  if(side){
+    if(!TG||!INIT){toast('Open TAPE inside Telegram to make a real call.',false);return;}
+    card.querySelectorAll('.row button').forEach(b=>b.classList.remove('pick'));
+    side.classList.add('pick');
+    const yes=side.dataset.side==='yes'?m.yes:(1-m.yes);
+    let sz=card.querySelector('.size'); if(sz) sz.remove();
+    sz=document.createElement('div'); sz.className='size'; sz.dataset.side=side.dataset.side; sz.dataset.units='1';
+    sz.innerHTML='<span class="sl">size</span>'+[1,5,10,25].map(u=>`<button class="u${u===1?' on':''}" data-u="${u}">${u}u</button>`).join('')
+      +`<button class="confirm">Call ${side.dataset.side.toUpperCase()} @ ${Math.round(yes*100)}¢ ›</button>`;
+    card.appendChild(sz);
+    return;
+  }
+
+  const u=e.target.closest('.size button[data-u]');
+  if(u){ const sz=u.closest('.size'); sz.dataset.units=u.dataset.u; sz.querySelectorAll('button[data-u]').forEach(b=>b.classList.toggle('on',b===u)); return; }
+
+  const conf=e.target.closest('.size .confirm');
+  if(conf){
+    const sz=conf.closest('.size'); const sd=sz.dataset.side, units=Number(sz.dataset.units)||1;
+    const price=sd==='yes'?m.yes:(1-m.yes);
+    conf.textContent='anchoring…'; conf.disabled=true;
+    try{
+      const r=await fetch('api/call',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({initData:INIT, market:'polymarket:'+m.id, side:sd, price, size:units})});
+      const d=await r.json();
+      if(d.ok){card.classList.add('called');
+        toast(`Called ${sd.toUpperCase()} · ${units}u · seq ${d.seq}<span class="sig">${d.caller} · anchors next cycle</span>`,true);
+        loadData();
+      } else { conf.disabled=false; conf.textContent='try again'; toast('Refused: '+(d.reason||d.error),false); }
+    }catch(err){ conf.disabled=false; conf.textContent='try again'; toast('Network error',false); }
+  }
 });
 
 document.getElementById('enterBtn').onclick=()=>{
