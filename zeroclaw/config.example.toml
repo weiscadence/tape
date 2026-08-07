@@ -2,8 +2,18 @@
 # This is the annotated skeleton; a real config also carries the defaults `zeroclaw
 # config migrate` fills in. Secrets are redacted — never commit a real key.
 #
-# CUSTODY TIER T1: the agent holds ONE hot key (faucet-wallet.json) that can only write
-# memo transactions. It never holds user funds and never signs a transfer or a swap.
+# CUSTODY: the agent holds ONE hot key that, THROUGH THIS PROCESS, can only write
+# {Memo, ComputeBudget} transactions — enforced in lib/signing-policy.js, not by convention.
+#
+# This comment used to read "it never holds user funds and never signs a transfer or a swap."
+# That was checked on 2026-07-31 and was false in three ways: the key holds real mainnet SOL,
+# it HAS signed a SOL transfer, and it is shared with two sibling projects. The retraction is
+# in SUBMISSION.md; leaving the comforting version in the file an operator actually copies
+# would have re-published a claim the write-up had already withdrawn.
+#
+# What the gate buys: THIS process cannot spend the balance. What it does not buy: custody —
+# any process that can read the keypair file bypasses the gate entirely, and `allowed_commands`
+# below includes `node`. Keep the balance small on purpose. See THREAT-MODEL.md D3.
 
 schema_version = 3
 

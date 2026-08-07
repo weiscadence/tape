@@ -213,17 +213,19 @@
   <!-- LIVE leaderboard as a printed receipt -->
   <div class="receipt">
     <h3><span>caller leaderboard</span><span>vs holding SOL</span></h3>
-    <div id="board">
-      <div class="row"><span class="rank">1</span><span class="who">8frH…392d <span class="tag">T1</span></span><span class="pnl u">+2.04</span></div>
-      <div class="row"><span class="rank">2</span><span class="who">cadence-wave <span class="tag">T1</span></span><span class="pnl u">+1.86</span></div>
-      <div class="row"><span class="rank">3</span><span class="who">colony-tester <span class="tag">T1</span></span><span class="pnl u">+1.38</span></div>
-      <div class="row"><span class="rank">4</span><span class="who">tape-eval-probe <span class="tag">T1</span></span><span class="pnl">0.00</span></div>
-      <div class="row"><span class="rank">5</span><span class="who">unsigned:cadence-wave <span class="tag">T0</span></span><span class="pnl d">−0.75</span></div>
-      <div class="row"><span class="rank">6</span><span class="who">Au5i…TUGm <span class="tag">T1</span></span><span class="pnl d">−2.00</span></div>
-    </div>
+    <!-- No hardcoded rows. This used to hold six of them with real-looking numbers, under a
+         footer that says "live" — so any time the fetch failed a visitor read stale figures as
+         current ones. On a site whose entire claim is that published numbers can be re-derived,
+         the fallback state has to be "we have not loaded it yet", never a frozen copy of a
+         number that has since moved. -->
+    <div id="board"><div class="row"><span class="who" style="opacity:.55">loading the live board…</span></div></div>
     <div class="foot">· · · live · scored after the outcome · losers included · · ·</div>
   </div>
-  <p class="tiny">early days. 6 callers, ~300 calls, none deleted.</p>
+  <!-- Filled from board.json's own population block. Hardcoded "6 callers, ~300 calls" here
+       read as six INDEPENDENT callers when every key on the board is ours — the precise
+       false impression operator-keys.json exists to close. It was closed on /app and this
+       page, added later, quietly reopened it in front of it. -->
+  <p class="tiny" id="pop">early days. none deleted.</p>
 
   <div class="how">
     <div class="step"><span class="n">01</span><p>You post a call. <b>Hashed and time-stamped</b> before the outcome is knowable.</p></div>
@@ -297,6 +299,24 @@
     });
   }).catch(()=>{});
   fetch('/board.json').then(r=>r.json()).then(d=>{
+    // The population line, from the board's own count rather than a number typed into the
+    // page. `independent` is keys the operator has ATTESTED are not theirs; while that is 0
+    // this must say so plainly, because a leaderboard is read as evidence of adoption and
+    // ours is not that yet. Understating adoption is the only safe direction to be wrong in.
+    const p=d.population;
+    if(p){
+      const calls=d.chain_count||d.chain||0;
+      const bits=[`${p.total} caller${p.total===1?'':'s'}`, `${calls} calls`, 'none deleted'];
+      const el=document.getElementById('pop');
+      if(el){
+        el.innerHTML='early days. '+bits.join(', ')+'. '
+          +(p.independent>0
+            ? `<b>${p.independent}</b> independent of the operator.`
+            : `<b>None independent of the operator yet</b> — every key here is ours, declared in `
+              +`<a class="lnk" href="/operator-keys.json">operator-keys.json</a>. Read the ranking as a `
+              +`working demo, not as adoption.`);
+      }
+    }
     let b=(d.board||[]).slice();
     if(!b.length) return;
     b.sort((a,z)=>parseFloat(z.edge||z.realized||0)-parseFloat(a.edge||a.realized||0));

@@ -30,6 +30,31 @@ const fs = require('fs');
 const path = require('path');
 
 const file = path.join(__dirname, '..', 'data', 'anchors.jsonl');
+
+// A FRESH CLONE HAS NO data/ AND THAT IS DELIBERATE (see .gitignore): an operator who
+// inherited our anchors could not tell their own first anchor from ours. But this is the
+// first command the write-up asks a reader to run, and until now it answered a clean clone
+// with a raw ENOENT stack trace — so the single most likely first experience of this project
+// was an unhandled exception, from the one command whose whole job is to make our headline
+// claim checkable. Say what happened and where the real numbers are instead.
+if (!fs.existsSync(file)) {
+  console.log(`no anchor record at ${path.relative(process.cwd(), file)} — nothing to re-derive.
+
+This is the expected state of a FRESH CLONE, not a failure: data/ is gitignored on purpose,
+so a clone starts empty rather than inheriting our record (.gitignore says why).
+
+  • To read OUR live numbers, which is what the write-up cites:
+        curl -s https://tape.drainfun.xyz/api/integrity
+        curl -s https://tape.drainfun.xyz/api/feed.json
+    Those are served from the anchors this command would otherwise summarise, and every
+    root in them is on Solana mainnet where you can check it without us.
+
+  • To start YOUR OWN record, so this command has something to measure:
+        node bin/doctor.js        # reports what is configured and what is missing
+        node bin/daemon.js --once # writes and anchors one interval (needs a funded key)`);
+  process.exit(0);
+}
+
 const a = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const first = a[0];
 const last = a[a.length - 1];

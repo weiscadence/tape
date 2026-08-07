@@ -189,11 +189,21 @@ lie is in the relationship. *Mitigations, none of which is a trust score:*
   authority in practice. Keeping re-derivation cheap is a standing requirement, not a
   finished property.
 
-**D3 — Custody of the anchor key. (ACCEPTED, narrowed 2026-07-29.)** The key is a T1 hot key
-readable by any process running as the host user (the risk profile sandboxes ZeroClaw's own
-tools, not a child `node`). *Accepted* because the key can only write memos and holds no funds
-— the blast radius of a leak is "someone can write memos," which the chain then attributes to
-that key anyway. Upgrading to a signer isolated from the agent host is a T2 concern.
+**D3 — Custody of the anchor key. (ACCEPTED, narrowed 2026-07-29; premise CORRECTED
+2026-07-31.)** The key is a hot key readable by any process running as the host user (the risk
+profile sandboxes ZeroClaw's own tools, not a child `node`).
+
+This entry used to accept the risk "because the key can only write memos and **holds no
+funds** — the blast radius of a leak is 'someone can write memos'." That premise was false and
+is withdrawn: the key holds real mainnet SOL, it has signed a SOL transfer, and it is shared
+with two sibling projects. **The blast radius of a leak is the balance, not zero.**
+
+What survives the correction is narrower and worth stating exactly: *through the signing gate*
+the key can only emit `{Memo, ComputeBudget}` (`lib/signing-policy.js`), so this process cannot
+spend the balance. A child process that reads the keypair file is outside the gate, so the
+acceptance now rests on the balance being deliberately small and per-day capped on the
+anchoring path — not on there being nothing to take. Upgrading to a signer isolated from the
+agent host is the actual fix and is open work, not a solved problem.
 
 *Narrowed:* the one process reachable from the open internet — the intake — is no longer one
 of those processes. See E1. The claim in `api.js` that the receipt key is deliberately not the

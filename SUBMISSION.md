@@ -1,9 +1,29 @@
 # TAPE — an undeletable call record, running on ZeroClaw
 
-**ZeroClaw × Solana bounty submission.** A ZeroClaw agent that takes trading and prediction
-calls on a real channel, commits each one to a Merkle root, and writes that root to Solana —
-so the timestamp on every call is a slot the operator does not control. The tape doesn't lie
-because the tape's clock isn't ours.
+**ZeroClaw × Solana bounty submission.** A ZeroClaw agent that **records** predictions on a
+real channel, commits each one to a Merkle root, and writes that root to Solana — so the
+timestamp on every call is a slot the operator does not control. The tape doesn't lie because
+the tape's clock isn't ours.
+
+> **TAPE places no trades. It is the opposite of a trading bot.** It executes no orders, holds
+> no user funds, touches no token program and integrates with no venue's write API — the one
+> key it has can emit `{Memo, ComputeBudget}` and nothing else, enforced in
+> `lib/signing-policy.js` and exercised by negative-control tests. `lib/hyperliquid.js` reads
+> `/info` only. What TAPE does is make *callers* accountable for calls they already make
+> elsewhere, which is the "safe hands" end of this bounty rather than the disqualified end.
+> We put this up front because the words "trading call" appear throughout — they describe the
+> **content of a record**, never an action this agent takes.
+
+**Who it's for.** Two audiences, and the second is the one that shows up:
+
+- **People who follow crypto and prediction callers** and are tired of a genre where everyone
+  has a perfect record because the bad calls get deleted. TAPE is where a caller's losses
+  survive.
+- **Agents that need a reputation a stranger can check.** This is the real user. An agent
+  cannot show up with a screenshot; it needs a record another agent can verify without
+  trusting the host. That is why the read path, the skill doc, the MCP server and the
+  assigned-question rounds exist — a caller who picks their own questions has a highlight
+  reel, not a record.
 
 **Live on Solana mainnet, unattended, for over a week.** Not a demo run for the video:
 **more than 1,700 anchors across more than 8 unbroken days**, every one on mainnet with real
@@ -77,11 +97,47 @@ The whole product rests on one property: **we cannot cheat our own leaderboard.*
 append-only log whose operator controls the clock is a diary. So the clock is the Solana
 slot, and a call only counts against an outcome if its anchoring slot came first.
 
-## Custody tier: T1, and honest about what that means
+## Custody tier
 
-TAPE defines three tiers. **Tier is disclosure, never a score** — a self-reported entry is
-not ranked below a wallet-derived one, because ranking it lower would quietly turn the badge
-into a penalty and push people to stop disclosing.
+> ### ⚠️ Two different tier scales, and ours collides with yours — read this first
+>
+> **On the bounty's custody ladder we are T2 (Sign), not T1.** We should say that plainly
+> rather than let a badge do the arguing. This section previously opened "Custody tier: T1",
+> meaning *TAPE's own* caller-evidence scale — but the bounty's ladder defines **T1 as
+> "Build. Unsigned transactions… Secrets held: none"**, and that is not us: we hold an ed25519
+> key, and it has signed and submitted **~1,996 mainnet transactions**. Reading our "T1" as
+> your T1 would have credited us with holding no secrets. It is the same label for a different
+> axis, and the ambiguity flatters us, so it goes at the top.
+>
+> - **TAPE's T0/T1/T2** (below) describe *how well a caller's claim is evidenced* — self-reported
+>   vs signed vs wallet-derived. It is a property of a **row in the record**.
+> - **The bounty's T0/T1/T2** describe *what the operator's agent can do with keys*. It is a
+>   property of **this deployment**. On that scale: **T2.**
+>
+> **How we meet your T2 conditions — three of four, and the fourth is missing:**
+>
+> | Your T2 requirement | Us |
+> |---|---|
+> | Hard spend caps enforced in code | **Yes** — `MAX_FEE_PER_TX` (30k lamports) and `MAX_FEE_PER_DAY` (10M) in `lib/signing-policy.js`, reserved *before* send, with negative-control tests |
+> | Mint allowlist enforced in code | **Yes, vacuously and deliberately** — the allowlist is `{Memo, ComputeBudget}`. No token program is reachable at all, so there is no mint to allow. System-program transfers are refused by name. |
+> | Session key with limited funds, never a main wallet | **Yes** — a dedicated hot key holding ~0.05 SOL, never a main wallet. Caveat disclosed below: it is *shared with two sibling projects*, which is why the blast radius is the balance rather than zero. |
+> | **An approval gate** | **NO. We do not have one, and we are not going to claim the allowlist is one.** |
+>
+> On the approval gate: the use case is *unattended* timestamping on a 5-minute cron, and a
+> human checkpoint in that loop defeats the only thing the product sells — a timestamp nobody
+> waited to approve. So instead of gating *when* the key signs, we constrained *what it can
+> ever sign* to one instruction that cannot move value. For this job we think that is the
+> stronger control, because an approval gate a human clicks 288 times a day becomes a reflex
+> and stops being a control. But it is **not** what your ladder asks for, and if the missing
+> checkpoint costs us points on Safety, that is a fair call and not a misunderstanding.
+>
+> The residual we are *not* pleased with is below and unchanged: a child `node` process can
+> read the keypair file and is **outside** this gate entirely.
+
+TAPE defines three tiers **of caller evidence** (this is the TAPE scale, not the bounty's).
+**Tier is disclosure, never a score** — a self-reported entry is not ranked below a
+wallet-derived one, because ranking it lower would quietly turn the badge into a penalty and
+push people to stop disclosing.
 
 - **T0 — self-reported.** Proves *commitment*, not execution: you said it, when you said it,
   and you never unsaid it. The anti-gaming comes from undeletability, not custody proof.
@@ -170,6 +226,18 @@ unnecessary WASM."* Anchoring a Merkle root in a memo transaction is a tier 1 pr
 | Mark every interval without being asked | declarative shell cron job, `*/5 * * * *` | **live** |
 | Deterministic marking pipeline for the agent path | SOP `tape-anchor` (`sop validate` passes) | built |
 | Positions survive restart | append-only chain on disk + Solana | **live** |
+| Remember a caller's identity and preferences across sessions | ZeroClaw **memory** (`uses_memory = true` on the cron job) | **live** |
+| Survive a provider outage mid-anchor | **cross-provider fallback** (`openrouter.default` → `fallback = ["gemini.default"]`) | **live, measured** — see the quota measurement below |
+| Let *other* agents use the record without our client | ZeroClaw is an **MCP client**, and we also ship an MCP **server** — `mcp/tape-mcp.mjs`, 17 tools | **live** |
+
+**Third-party trust, declared as the rules require.** We run **no** external MCP server and
+depend on no agent-run service, so nothing signs or holds keys on our behalf. `mcp/tape-mcp.mjs`
+is a server *we* wrote and ship for other agents to call; when it signs, it signs with **its
+own** key, never the anchor key. The only outside parties in the loop are read-only HTTPS data
+sources — Solana RPC, Pyth/Coinbase/Bitstamp/Kraken for prices (4-source fallback,
+`lib/price-sources.js`), Polymarket and Hyperliquid `/info` for market metadata. None of them
+can move value; the worst a hostile one can do is give us a wrong price, which is why there are
+four and why disagreement is a logged anomaly rather than a silent average.
 
 A single agent turn over Telegram was verified end to end: **the agent called `tape_post`,
 the entry was anchored to slot 435825732, and the independent verifier returned VERIFIED** —
@@ -264,8 +332,9 @@ node verify/tape-verify.mjs receipt.json --rpc <your-rpc-url>
 Config: `~/.zeroclaw/config.toml` (`openrouter.default` provider running
 `deepseek/deepseek-chat` with `gemini.default` as a cross-provider fallback,
 `telegram.tape` channel, `tape` skill bundle, narrow `tape` risk profile, `tape-anchor`
-cron). Anchor key is a memo-only T1 hot wallet. Full annotated copy in
-`zeroclaw/config.example.toml`.
+cron). Anchor key is a memo-only hot wallet — **T2 (Sign) on the bounty's custody ladder**,
+since it signs and submits; memo-only is what the code gate enforces, not a lower tier. Full
+annotated copy in `zeroclaw/config.example.toml`.
 
 The provider choice is measured, not preference. Posting one call is about eight model
 calls — menu, post, anchor — which fits inside Gemini's free-tier 20-per-minute quota

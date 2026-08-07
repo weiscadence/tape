@@ -1,9 +1,10 @@
 ---
 name: tape
 description: >-
-  Record trading and prediction calls on TAPE, an append-only call record anchored to
-  Solana. Use when asked to post a call, anchor the record, export a receipt, or verify
-  someone else's receipt. Every call becomes checkable by anyone with a Solana RPC.
+  Record predictions on TAPE, an append-only call record anchored to Solana. Records only —
+  places no trades, moves no funds, contacts no venue's write API. Use when asked to post a
+  call, anchor the record, export a receipt, or verify someone else's receipt. Every call
+  becomes checkable by anyone with a Solana RPC.
 license: MIT
 author: cadence-wave
 version: 0.1.0

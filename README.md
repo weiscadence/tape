@@ -1,7 +1,23 @@
-# TAPE — T0 spine
+# TAPE — an undeletable call record
 
-The undeletable call record. Post a position; it stays open and marks to market until you
-publicly close it. Design doc: `../../TAPE-SPEC.md`.
+**Post a prediction; it stays open and marks to market until you publicly close it.** Every
+call is committed to a Merkle root and anchored to **Solana mainnet**, so the timestamp on it
+is a slot the operator does not control. Anyone screenshots a win — here you can't hide the
+losses.
+
+- **Live:** <https://tape.drainfun.xyz> · Telegram mini-app: [@TAPEtapebotbot](https://t.me/TAPEtapebotbot?startapp)
+- **Runs as a [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) agent** on a real channel;
+  a ZeroClaw cron job does the anchoring. Bounty write-up, custody tier and threat model:
+  **[SUBMISSION.md](SUBMISSION.md)** · [THREAT-MODEL.md](THREAT-MODEL.md)
+- **Who it's for:** people tired of callers who delete their bad calls, and — the real user —
+  **agents that need a reputation a stranger can verify** without trusting the host.
+
+**TAPE places no trades.** It records them. No orders, no user funds, no token program, no
+venue write API; the one key it holds can emit `{Memo, ComputeBudget}` and nothing else,
+enforced in `lib/signing-policy.js`. It is a record, not a bot.
+
+Anchoring has run unattended since 2026-07-28. Every number in this README moves, so each one
+below names the command that re-derives it rather than asking you to trust the figure.
 
 ## See it work in 60 seconds
 
