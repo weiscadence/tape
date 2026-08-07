@@ -34,6 +34,13 @@ const t = (name, fn) => {
 const doc = agentDoc();
 const CANON = 'https://tape.drainfun.xyz';
 
+// Both prose documents written for machine readers. Hoisted here because the download check
+// above uses them too — llms.txt names six downloadable tools.
+const PROSE_DOCS = ['tape-skill.md', 'llms.txt'];
+const PROSE_TEXT = PROSE_DOCS
+  .map((f) => fs.readFileSync(path.join(__dirname, '..', 'web', f), 'utf8'))
+  .join('\n');
+
 console.log('\nPUBLISHED URLS — absolute, and pointing at something that exists');
 
 t('every endpoint key is an absolute URL, never an origin-relative path', () => {
@@ -71,7 +78,10 @@ t('the router allowlist was actually parsed (canary — an empty set would pass 
 });
 
 t('every file the docs say to download is a file the router serves', () => {
-  const text = JSON.stringify(doc);
+  // Prose docs are concatenated in below (see PROSE_DOCS): llms.txt names six downloadable
+  // tools, and a name added there but not to lib/served.js is the exact "shipped a tool and
+  // never exposed it" pattern the ALLOWED map documents four separate times.
+  const text = JSON.stringify(doc) + PROSE_TEXT;
   // `md` added 2026-08-07 with tape-skill.md. The extension list is an allowlist, so a new file
   // type is invisible to this check until it is named here — the skill was documented, linked
   // and unserved-by-default, and this assertion said nothing.
@@ -190,7 +200,7 @@ t('CONTROL: a link to an unserved file would be caught', () => {
  * drift from the server. Path params are normalised to `*` because `<pubkey>` and `<signer>`
  * are the same route with different prose.
  */
-const SKILL = fs.readFileSync(path.join(__dirname, '..', 'web', 'tape-skill.md'), 'utf8');
+const SKILL = PROSE_TEXT;
 const normalise = (p) => p.replace(/<[^>]*>?/g, '*').replace(/\/+$/, '');
 const declared = new Set(
   Object.keys(doc.endpoints)
@@ -207,9 +217,16 @@ const skillPaths = [...new Set(
     .filter(Boolean)
 )];
 
-t('the skill-doc path scan found paths at all (canary — an empty list passes vacuously)', () => {
+t('the prose path scan found paths at all (canary — an empty list passes vacuously)', () => {
   assert.ok(skillPaths.length >= 6,
-    `scanned only ${skillPaths.length} /api/ path(s) from tape-skill.md; the regex has drifted`);
+    `scanned only ${skillPaths.length} /api/ path(s) from the prose docs; the regex has drifted`);
+});
+
+t('BOTH prose docs are in the scan (canary — one silent doc is how the last one shipped)', () => {
+  for (const f of PROSE_DOCS) {
+    const body = fs.readFileSync(path.join(__dirname, '..', 'web', f), 'utf8');
+    assert.ok(/\/api\//.test(body), `${f} contributed no /api/ paths — it is being scanned vacuously`);
+  }
 });
 
 t('every /api/ path quoted in the skill doc is a route the API declares', () => {

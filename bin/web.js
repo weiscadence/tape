@@ -33,6 +33,9 @@ const TYPES = {
   // humans as well as fetched by agents. text/markdown is the semantically correct answer and the
   // practically worse one: browsers download it. Agents do not care either way.
   '.md': 'text/plain; charset=utf-8',
+  // llms.txt. Without this entry the fallback is application/octet-stream, which turns the
+  // one file agent crawlers probe by convention into a download prompt.
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 const { ALLOWED, ROOT } = require('../lib/served');
