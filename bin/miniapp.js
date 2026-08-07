@@ -217,8 +217,9 @@ async function handleCall(req, res) {
   if (!LIVE_PRICE(p)) return json(res, 400, { error: 'price must be between 0 and 1' });
   // Size is the conviction/stake in units — a required, deliberate choice so a call is never a
   // careless one-tap, and so the record carries how much someone stood behind each call.
-  const units = Math.round(Number(size));
-  if (!Number.isFinite(units) || units < 1 || units > 1000) return json(res, 400, { error: 'size must be 1–1000 units' });
+  // Fractional units are allowed (a 0.25u "lean" is a real, weaker conviction) up to 1000.
+  const units = Math.round(Number(size) * 100) / 100;
+  if (!Number.isFinite(units) || units < 0.25 || units > 1000) return json(res, 400, { error: 'size must be 0.25–1000 units' });
 
   let rec;
   try {

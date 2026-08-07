@@ -91,12 +91,17 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 .mkt.called{opacity:.5}
 .mkt .ct{display:none;color:var(--green);font-size:11px;font-weight:700;margin-top:9px;letter-spacing:.04em}
 /* size picker (step 2 of a call) */
-.mkt .size{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}
-.mkt .size .sl{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-right:2px}
-.mkt .size button[data-u]{background:rgba(255,255,255,.02);border:1px solid var(--line);color:var(--dim);
-  border-radius:8px;padding:7px 11px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
-.mkt .size button[data-u].on{border-color:var(--amber);color:var(--amber);background:rgba(255,176,32,.08)}
-.mkt .size .confirm{flex:1 0 100%;margin-top:4px;background:var(--amber);border:0;color:#1a1204;
+.mkt .size{margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}
+.mkt .size .srow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.mkt .size .sl{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.mkt .size .sval{color:var(--amber);font-size:16px;font-weight:800}
+.mkt .size .srange{width:100%;-webkit-appearance:none;appearance:none;height:5px;border-radius:4px;
+  background:linear-gradient(90deg,var(--amber),rgba(255,176,32,.25));outline:none;margin:2px 0}
+.mkt .size .srange::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+  background:var(--amber);border:2px solid #1a1204;cursor:pointer;box-shadow:0 0 10px rgba(255,176,32,.5)}
+.mkt .size .srange::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--amber);border:2px solid #1a1204;cursor:pointer}
+.mkt .size .sticks{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin:3px 1px 10px;letter-spacing:.02em}
+.mkt .size .confirm{width:100%;background:var(--amber);border:0;color:#1a1204;
   border-radius:10px;padding:12px;font:inherit;font-weight:800;font-size:13.5px;letter-spacing:.04em;cursor:pointer}
 .mkt .size .confirm:disabled{opacity:.6}
 .r.rc{cursor:pointer}
@@ -449,14 +454,13 @@ document.getElementById('mktlist').addEventListener('click', async (e)=>{
     const yes=side.dataset.side==='yes'?m.yes:(1-m.yes);
     let sz=card.querySelector('.size'); if(sz) sz.remove();
     sz=document.createElement('div'); sz.className='size'; sz.dataset.side=side.dataset.side; sz.dataset.units='1';
-    sz.innerHTML='<span class="sl">size</span>'+[1,5,10,25].map(u=>`<button class="u${u===1?' on':''}" data-u="${u}">${u}u</button>`).join('')
-      +`<button class="confirm">Call ${side.dataset.side.toUpperCase()} @ ${Math.round(yes*100)}¢ ›</button>`;
+    sz.innerHTML=`<div class="srow"><span class="sl">confidence</span><b class="sval">1u</b></div>
+      <input type="range" class="srange" min="0" max="5" step="1" value="3">
+      <div class="sticks"><span>.25</span><span>.5</span><span>.75</span><span>1</span><span>2</span><span>5</span></div>
+      <button class="confirm">Call ${side.dataset.side.toUpperCase()} @ ${Math.round(yes*100)}¢ · <span class="cu">1u</span> ›</button>`;
     card.appendChild(sz);
     return;
   }
-
-  const u=e.target.closest('.size button[data-u]');
-  if(u){ const sz=u.closest('.size'); sz.dataset.units=u.dataset.u; sz.querySelectorAll('button[data-u]').forEach(b=>b.classList.toggle('on',b===u)); return; }
 
   const conf=e.target.closest('.size .confirm');
   if(conf){
@@ -473,6 +477,16 @@ document.getElementById('mktlist').addEventListener('click', async (e)=>{
       } else { conf.disabled=false; conf.textContent='try again'; toast('Refused: '+(d.reason||d.error),false); }
     }catch(err){ conf.disabled=false; conf.textContent='try again'; toast('Network error',false); }
   }
+});
+
+// confidence slider — discrete stops, fractional leans allowed
+const SIZE_STOPS=[0.25,0.5,0.75,1,2,5];
+document.getElementById('mktlist').addEventListener('input',(e)=>{
+  const r=e.target.closest('.srange'); if(!r)return;
+  const u=SIZE_STOPS[Number(r.value)]||1, sz=r.closest('.size');
+  sz.dataset.units=String(u);
+  const sv=sz.querySelector('.sval'); if(sv) sv.textContent=u+'u';
+  const cu=sz.querySelector('.cu'); if(cu) cu.textContent=u+'u';
 });
 
 document.getElementById('enterBtn').onclick=()=>{
