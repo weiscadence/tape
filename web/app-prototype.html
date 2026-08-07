@@ -34,7 +34,7 @@ html,body{margin:0;padding:0;color:var(--ink);
 /* scrim over the pipes so content stays readable — same technique as the landing */
 #scrim{position:fixed;inset:0;z-index:0;pointer-events:none;
   background:radial-gradient(1000px 620px at 50% -8%,rgba(255,176,32,.09),transparent),
-             radial-gradient(130% 95% at 50% 44%,transparent 34%,rgba(16,13,9,.80) 100%)}
+             radial-gradient(140% 110% at 50% 50%,transparent 42%,rgba(16,13,9,.62) 100%)}
 @media (prefers-reduced-motion:reduce){#sky{opacity:.5}}
 .phone{position:relative;z-index:1;max-width:440px;margin:0 auto;min-height:100vh;
   display:flex;flex-direction:column}
@@ -53,7 +53,14 @@ header{padding:16px 15px 12px}
 
 .acct{margin-top:13px;display:flex;align-items:center;gap:11px;background:var(--card);
   border:1px solid var(--line);border-radius:14px;padding:11px 13px;backdrop-filter:blur(9px)}
-.acct .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex:0 0 9px}
+.acct .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:0 0 9px}
+/* Honest sign-in state: green + "signed in" only when Telegram actually gave us a user
+   (body.tg). On the plain web page nothing is connected, so it says so. */
+.s-in{display:none}.s-out{display:inline}
+body.tg .s-in{display:inline}body.tg .s-out{display:none}
+body.tg .acct .dot,body.tg .gate .signin .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+.fine.s-in,.fine.s-out{display:none}
+body.tg .fine.s-in{display:block}body:not(.tg) .fine.s-out{display:block}
 .acct .who b{font-size:14px;display:block}
 .acct .who span{font-size:11px;color:var(--dim)}
 .acct .verify{margin-left:auto;text-align:right;text-decoration:none}
@@ -156,7 +163,7 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 .gate .pitch b{color:var(--amber)}
 .gate .signin{margin-top:26px;display:flex;align-items:center;gap:9px;background:var(--card);
   border:1px solid var(--line);border-radius:12px;padding:11px 15px}
-.gate .signin .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.gate .signin .dot{width:9px;height:9px;border-radius:50%;background:var(--dim)}
 .gate .signin span{font-size:13px}.gate .signin b{color:var(--ink)}
 .gate .enter{margin-top:18px;background:var(--amber);color:#1a1204;border:0;font:inherit;font-weight:800;
   letter-spacing:.06em;font-size:15px;padding:14px 40px;border-radius:12px;cursor:pointer;
@@ -174,10 +181,12 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
   <div class="pitch">Call the market. It's anchored to <b>Solana</b>, on Solana's clock — so you <b>can't</b> delete a loser or backdate a win. Your record becomes a receipt nobody can edit.</div>
   <div class="signin">
     <div class="dot"></div>
-    <span>Signed in as <b>@jiggyjigsters</b></span>
+    <span class="s-in">Signed in as <b class="handle">@you</b></span>
+    <span class="s-out">Not signed in — open in Telegram to call</span>
   </div>
   <button class="enter" id="enterBtn">Enter TAPE →</button>
-  <div class="fine">Telegram signed you in automatically — no wallet, no password. Verifying a wallet later is optional and never moves funds.</div>
+  <div class="fine s-in">Telegram signed you in automatically — no wallet, no password. Verifying a wallet later is optional and never moves funds.</div>
+  <div class="fine s-out">This is the web preview — you can browse markets and the board here. To actually call, open TAPE inside Telegram; it signs you in with one tap, no wallet, no password.</div>
 </div>
 
 <div class="phone">
@@ -188,10 +197,12 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
     <div class="acct">
       <div class="dot"></div>
       <div class="who">
-        <b>@jiggyjigsters</b>
-        <span>signed in via Telegram — zero taps</span>
+        <b class="handle s-in">@you</b>
+        <b class="s-out">Guest</b>
+        <span class="s-in">signed in via Telegram — zero taps</span>
+        <span class="s-out">web preview — open in Telegram to sign in</span>
       </div>
-      <a class="verify" href="#"><b>Verify ◈</b><span>optional badge</span></a>
+      <a class="verify s-in" href="#"><b>Verify ◈</b><span>optional badge</span></a>
     </div>
   </header>
 
@@ -221,7 +232,7 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
       <p class="hint">You're already an account — Telegram signed you in. Make a call and it's anchored under you.</p>
       <div class="ticket">
         <div id="melist">
-          <div class="r"><div class="rk one">◆</div><div class="id"><b>@jiggyjigsters</b><span class="bg human">HUMAN · TELEGRAM · 0 CALLS</span></div><div class="edge flat">—</div></div>
+          <div class="r"><div class="rk one">◆</div><div class="id"><b class="handle s-in">@you</b><b class="s-out">Not signed in</b><span class="bg human s-in">HUMAN · TELEGRAM · 0 CALLS</span><span class="bg human s-out">open in Telegram to start</span></div><div class="edge flat">—</div></div>
         </div>
       </div>
 
@@ -318,10 +329,12 @@ document.getElementById('enterBtn').onclick=()=>{
   setTimeout(()=>window.dispatchEvent(new Event('resize')),520); // recompute canvas size
 };
 
-// reflect the real signed-in handle if Telegram gave us one
-if(HANDLE){document.querySelectorAll('.gate .signin b, .acct .who > b')
-  .forEach(el=>{el.textContent='@'+HANDLE;});
-  const me=document.getElementById('melist'); if(me)me.querySelector('b').textContent='@'+HANDLE;}
+// Only claim "signed in" when Telegram actually handed us a verified user. On the plain web
+// page there is no Telegram, so body.tg stays off and the UI says "not signed in".
+if(HANDLE){
+  document.body.classList.add('tg');
+  document.querySelectorAll('.handle').forEach(el=>{el.textContent='@'+HANDLE;});
+}
 
 loadData();
 
@@ -343,7 +356,9 @@ loadData();
   size();
   const PAL=['#ffb020','#f0902a','#e8dcc0','#cc7a33','#ffcf6b','#4cae6a','#e0554b','#6bb8ff'];
   const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
-  function iso(px,py,pz){ const t=24*DPR; return [ W/2 + (px-py)*t, H*0.50 + (px+py)*t*0.62 - pz*t ]; }
+  // Centered vertically (0.50) with a wider vertical scale so the network reaches top AND bottom
+  // edges instead of clumping high.
+  function iso(px,py,pz){ const t=24*DPR; return [ W/2 + (px-py)*t, H*0.52 + (px+py)*t*0.80 - pz*t ]; }
   function Pipe(){ this.reset(true); }
   Pipe.prototype.reset=function(spread){
     // Start points spread across the whole grid so the pipes fill the field, not just the middle.
