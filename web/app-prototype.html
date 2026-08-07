@@ -54,13 +54,12 @@ header{padding:16px 15px 12px}
 .acct{margin-top:13px;display:flex;align-items:center;gap:11px;background:var(--card);
   border:1px solid var(--line);border-radius:14px;padding:11px 13px;backdrop-filter:blur(9px)}
 .acct .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:0 0 9px}
-/* Honest sign-in state: green + "signed in" only when Telegram actually gave us a user
-   (body.tg). On the plain web page nothing is connected, so it says so. */
-.s-in{display:none}.s-out{display:inline}
-body.tg .s-in{display:inline}body.tg .s-out{display:none}
+/* Honest sign-in state: green + "signed in" only when Telegram actually gave us a user.
+   Visibility is driven in JS with .hide (display:none!important) so it can't lose a CSS
+   specificity fight with the badge styles — that bug showed BOTH states at once. */
+.hide{display:none!important}
+.s-in{display:none}
 body.tg .acct .dot,body.tg .gate .signin .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
-.fine.s-in,.fine.s-out{display:none}
-body.tg .fine.s-in{display:block}body:not(.tg) .fine.s-out{display:block}
 .acct .who b{font-size:14px;display:block}
 .acct .who span{font-size:11px;color:var(--dim)}
 .acct .verify{margin-left:auto;text-align:right;text-decoration:none}
@@ -330,11 +329,15 @@ document.getElementById('enterBtn').onclick=()=>{
 };
 
 // Only claim "signed in" when Telegram actually handed us a verified user. On the plain web
-// page there is no Telegram, so body.tg stays off and the UI says "not signed in".
-if(HANDLE){
+// page there is no Telegram, so it says "not signed in". Toggle .hide on every s-in/s-out
+// element so one and only one state ever shows.
+const signedIn = !!HANDLE;
+if(signedIn){
   document.body.classList.add('tg');
   document.querySelectorAll('.handle').forEach(el=>{el.textContent='@'+HANDLE;});
 }
+document.querySelectorAll('.s-in').forEach(el=>el.classList.toggle('hide',!signedIn));
+document.querySelectorAll('.s-out').forEach(el=>el.classList.toggle('hide',signedIn));
 
 loadData();
 
@@ -354,7 +357,8 @@ loadData();
     W=c.width=cw*DPR; H=c.height=ch*DPR;
     x.fillStyle='#100d09'; x.fillRect(0,0,W,H); }
   size();
-  const PAL=['#ffb020','#f0902a','#e8dcc0','#cc7a33','#ffcf6b','#4cae6a','#e0554b','#6bb8ff'];
+  // Warm scheme only — amber / orange / bronze / cream. (The green/red/blue clashed.)
+  const PAL=['#ffb020','#f0902a','#e8dcc0','#cc7a33','#ffcf6b','#b8641f','#ffd98a'];
   const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
   // Centered vertically (0.50) with a wider vertical scale so the network reaches top AND bottom
   // edges instead of clumping high.
