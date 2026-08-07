@@ -18,6 +18,15 @@
  * on a free node. The newest anchor is always fresh, so it verifies on ANY node, green or
  * red, never amber. We keep the tight bound as a claim (`tightest`) that anyone with an
  * archival node can still confirm — nothing is lost, the default check just always completes.
+ *
+ * `tightest` CARRIES ITS OWN PROOF (added 2026-08-07, cold-read finding #4.1): a bare
+ * `{slot, signature}` with no proof is a claim, not a check — the published verifier never
+ * read it and a reader had no way to confirm it independently. The tree at the earliest
+ * covering anchor is a strictly earlier, smaller batch than the one `proof` above is built
+ * against, so it needs its OWN inclusion proof against its OWN root; the primary `proof`
+ * will not reconstruct `tightest.root` because it was built over a different leaf count.
+ * Verified here before emission for the same reason the primary proof is: a receipt this
+ * file cannot itself verify would fail in the recipient's verifier and read as our fraud.
  */
 
 const fs = require('fs');
@@ -96,11 +105,18 @@ function buildReceipt(selector) {
       cluster: anchor.cluster,
       explorer: `https://solscan.io/tx/${anchor.signature}`,
     },
-    // The tightest provable "no later than", carried as a claim. The default check verifies
-    // against `anchor` (latest) and always completes; a verifier who wants this tighter bound
-    // can confirm `tightest.signature` on an archival node. Same entry, earlier commitment.
+    // The tightest provable "no later than". The default check verifies against `anchor`
+    // (latest) and always completes; a verifier who wants this tighter bound gets a real
+    // second inclusion proof to check it with, not just a slot number to trust.
     tightest: earliest && earliest.signature !== anchor.signature
-      ? { slot: earliest.slot, signature: earliest.signature }
+      ? (() => {
+          const earlyTree = buildTree(rows.slice(0, earliest.count).map((r) => hashLeaf(entryBytes(r.entry))));
+          const earlyProof = proveInclusion(earlyTree, idx);
+          if (!verifyEntryInclusion(entryBytes(row.entry), earlyProof, earliest.root)) {
+            throw new Error(`refusing to emit: tightest proof for entry ${idx} does not reconstruct anchor root ${earliest.root}`);
+          }
+          return { slot: earliest.slot, signature: earliest.signature, root: earliest.root, proof: earlyProof };
+        })()
       : null,
     entry_hash: row.entry_hash,
     seq: row.seq,

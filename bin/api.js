@@ -689,7 +689,12 @@ function agentDoc() {
         + '`population` block counts them, because a list of keys reads as a user base and most '
         + 'of ours are ours. Do not report this route\'s length as adoption.',
       'GET https://tape.drainfun.xyz/api/entry/<seq|entry_hash|latest>': 'self-contained receipt: entry + merkle proof + anchor. '
-        + '202 means accepted but not yet anchored, which is a waiting state and not an error.',
+        + '202 means accepted but not yet anchored, which is a waiting state and not an error. '
+        + 'may also carry `tightest` — an EARLIER anchor that also covers this entry, with its own '
+        + 'proof and root, tighter than `anchor` but more likely pruned off a free RPC node. '
+        + '`anchor` is always fresh and is what the default verifier check uses; `tightest`, when '
+        + 'present, is independently checkable too (tape-verify.mjs reads and confirms it) and gives '
+        + 'a strictly earlier "no later than" bound — the tighter number is the one worth quoting.',
       'GET https://tape.drainfun.xyz/api/health': 'chain length, head, and the pubkey receipts are signed by',
       'POST https://tape.drainfun.xyz/api/window/enroll': {
         body: 'a signed enroll row { type:"enroll", epoch, caller, ts_claimed, nonce, signer, sig }',

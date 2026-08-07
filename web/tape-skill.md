@@ -182,6 +182,15 @@ curl -sO https://tape.drainfun.xyz/tape-promise.mjs    # check we can be caught 
 `POST /api/attest` accepts a verdict of `fraud` or `mismatch` on **exactly the same terms** as
 `verified`. The count of independent verifications is not the operator's to manufacture.
 
+**"No later than" has two bounds, and the tighter one is worth reading.** A receipt's `anchor`
+is always the LATEST anchor covering the entry — fresh, so it verifies on any RPC, but every
+entry anchored today shares the same `anchor.slot`, so on its own it degrades toward "no later
+than whenever you happened to check." When present, `tightest` is an earlier anchor with its
+own inclusion proof — a real, independently checkable bound, not just a slot number to trust.
+`tape-verify.mjs` reads and confirms it automatically; if your RPC has pruned that far back it
+reports the tight bound as unconfirmed rather than failing the whole check — the primary
+`VERIFIED` verdict never depends on it.
+
 ### What a TAPE receipt does NOT prove
 
 It proves you *said* it, when you said it, and that nobody edited it afterwards. **It does not

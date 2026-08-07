@@ -298,6 +298,75 @@ async function fetchAnchor(rpcUrl, signature) {
   };
 }
 
+/**
+ * Independently confirm `receipt.tightest`, if present — the earlier, tighter "no later
+ * than" bound that the default check above deliberately does not use (see receipt.js: the
+ * default anchor is always fresh so the check always completes on any RPC; the tight bound
+ * trades that guarantee for a smaller window and may be pruned off a free node).
+ *
+ * This is a BONUS check, never a downgrade. `tightest` failing to confirm (RPC pruned it,
+ * offline, whatever) says nothing about the primary VERIFIED verdict above — it only means
+ * the reader does not get the tighter number this run. Folding a pruned-node failure into
+ * the main verdict would be exactly the silent-amber-as-red mistake the 2026-08-05 design
+ * note calls out.
+ */
+async function checkTightest(receipt, rpcUrl) {
+  const t = receipt.tightest;
+  if (!t || typeof t !== 'object') return null;
+  if (typeof t.signature !== 'string' || !Array.isArray(t.proof) || typeof t.root !== 'string') {
+    return { confirmed: false, claimedSlot: t.slot ?? null,
+      note: 'receipt carries a "tightest" claim with no proof to check it against — '
+        + 'cannot confirm, treat the slot as unverified' };
+  }
+
+  let entryBytes;
+  try {
+    entryBytes = Buffer.from(canonicalize(receipt.entry), 'utf8');
+  } catch {
+    return { confirmed: false, claimedSlot: t.slot, note: 'could not re-canonicalize entry for the tight check' };
+  }
+
+  let computedTightRoot;
+  try {
+    computedTightRoot = rootFromProof(entryBytes, t.proof);
+  } catch (e) {
+    return { confirmed: false, claimedSlot: t.slot, note: `tightest proof malformed: ${e.message}` };
+  }
+  if (computedTightRoot !== t.root) {
+    // The receipt's own two fields disagree with each other — not yet a chain check, but
+    // already conclusive: this proof does not belong to this claimed root.
+    return { confirmed: false, claimedSlot: t.slot,
+      note: 'tightest proof does not reconstruct the tightest root the receipt itself claims' };
+  }
+
+  let anchor;
+  try {
+    anchor = await fetchAnchor(rpcUrl, t.signature);
+  } catch (e) {
+    return { confirmed: false, claimedSlot: t.slot, note: `tight-anchor RPC unreachable: ${e.message}` };
+  }
+  if (!anchor.found) {
+    return { confirmed: false, claimedSlot: t.slot,
+      note: 'tight-anchor transaction not found on this RPC — likely pruned off a free node; '
+        + 'retry against an archival RPC to confirm the tighter bound' };
+  }
+  if (!anchor.parsed || anchor.parsed.p !== 'tape') {
+    return { confirmed: false, claimedSlot: t.slot,
+      note: 'the tightest.signature transaction carries no TAPE anchor memo' };
+  }
+  if (anchor.parsed.root !== t.root) {
+    return { confirmed: false, claimedSlot: t.slot,
+      note: `chain disagrees with the tightest claim: on-chain root ${anchor.parsed.root}, `
+        + `claimed ${t.root} — do not trust the tight bound` };
+  }
+  if (anchor.slot !== t.slot) {
+    return { confirmed: false, claimedSlot: t.slot, chainSlot: anchor.slot,
+      note: `chain says this anchor is at slot ${anchor.slot}, receipt claimed ${t.slot} — chain wins, using ${anchor.slot}` };
+  }
+
+  return { confirmed: true, slot: anchor.slot, blockTime: anchor.blockTime, signature: t.signature };
+}
+
 /* ------------------------------------------------------------------ *
  * the check
  * ------------------------------------------------------------------ */
@@ -451,7 +520,8 @@ export async function verifyReceipt(receipt, { rpcUrl = DEFAULT_RPC, expect = nu
     };
   }
 
-  return { verdict: VERIFIED, ...common };
+  const tight = await checkTightest(receipt, rpcUrl);
+  return { verdict: VERIFIED, ...common, tight };
 }
 
 /* ------------------------------------------------------------------ *
@@ -541,6 +611,21 @@ Default RPC ${DEFAULT_RPC} — override it. Do not take our word for the source 
 
 This ${noun} existed, in exactly this form, no later than slot ${result.slot}.
 Checked against ${rpcUrl}; no TAPE service was contacted.`);
+    // The tight bound, when the receipt carries one and it independently confirms. Printed
+    // as a SEPARATE, TIGHTER "no later than" — the line above stays true either way, this
+    // one is strictly stronger when present. cold-read finding #4.1: the receipt has
+    // carried this claim since 2026-08-05 and this tool never read it until now.
+    if (result.tight?.confirmed) {
+      const gapSlots = result.slot - result.tight.slot;
+      console.log(`
+  tighter bound  CONFIRMED — this ${noun} existed no later than slot ${result.tight.slot}
+                 (${fmtTime(result.tight.blockTime)}), independently checked against its own
+                 anchor transaction. That is ${gapSlots.toLocaleString()} slots earlier than the
+                 default bound above.`);
+    } else if (result.tight) {
+      console.log(`
+  tighter bound  claimed (slot ${result.tight.claimedSlot ?? 'unknown'}) but NOT confirmed this run: ${result.tight.note}`);
+    }
     // The line that was missing, and the whole of finding #588. Anchoring proves a row was
     // said. It says nothing about whether the row is a position, and only one of those two
     // is what a reader handed a "receipt" believes they are looking at.
@@ -565,4 +650,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   main(process.argv).then((c) => { process.exitCode = c; });
 }
 
-export { canonicalize, base58Decode, rootFromProof, fetchAnchor, classify, VERIFIED, FRAUD, UNKNOWN, MISMATCH };
+export { canonicalize, base58Decode, rootFromProof, fetchAnchor, classify, checkTightest, VERIFIED, FRAUD, UNKNOWN, MISMATCH };
