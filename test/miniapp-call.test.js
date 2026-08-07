@@ -33,8 +33,8 @@ function drive(body) {
   });
 }
 
-test('a verified tap appends a real unsigned entry', async () => {
-  const { code, payload } = await drive({ initData: goodInit, market: MARKET, side: 'yes', price: 0.55 });
+test('a verified tap appends a real unsigned entry with size', async () => {
+  const { code, payload } = await drive({ initData: goodInit, market: MARKET, side: 'yes', price: 0.55, size: 5 });
   assert.equal(code, 200, JSON.stringify(payload));
   assert.equal(payload.ok, true);
   assert.equal(payload.caller, 'unsigned:jiggyjigsters');
@@ -45,7 +45,15 @@ test('a verified tap appends a real unsigned entry', async () => {
   assert.equal(mine.entry.caller, 'jiggyjigsters');
   assert.equal(mine.entry.side, 'yes');
   assert.equal(mine.entry.entry_ref, '0.5500');
+  assert.equal(mine.entry.size, '5');
   assert.ok(!mine.entry.signer, 'unsigned');
+});
+
+test('size is required and bounded', async () => {
+  for (const size of [undefined, 0, -1, 1001, 'x']) {
+    const { code } = await drive({ initData: goodInit, market: MARKET, side: 'no', price: 0.4, size });
+    assert.equal(code, 400, `size ${size} should be refused`);
+  }
 });
 
 test('an unverified initData is refused (401), nothing appended', async () => {
