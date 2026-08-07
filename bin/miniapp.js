@@ -30,6 +30,7 @@ const { recordTitle } = require('../lib/market-titles');
 const { buildReceipt } = require('./receipt');
 const { plainReceipt } = require('../lib/receipt-plain');
 const { standing } = require('../lib/tiers');
+const { fetchMarkets: hlMarkets, SETTLEABLE: HL_SETTLEABLE } = require('../lib/hyperliquid');
 
 const PORT = Number(process.env.TAPE_MINIAPP_PORT || 3219);
 const APP_HTML = path.join(__dirname, '..', 'web', 'app-prototype.html');
@@ -44,9 +45,31 @@ const BOT_TOKEN = (() => {
 const MAX_BODY = 8 * 1024;
 const chain = new Chain(path.join(DATA, 'tape.jsonl'));
 
-// ---- markets cache (live Polymarket, refreshed on an interval) ---------------------------
-let marketsCache = { at: 0, data: [] };
-function refreshMarkets() {
+// ---- markets cache (live, multi-venue, refreshed on an interval) -------------------------
+//
+// TWO VENUES, ONE CACHE, AND EACH ROW SAYS WHICH (2026-08-07). Every cached row now carries
+// a fully venue-qualified `market` id and a `venue` tag. That is not decoration: the write
+// path signs the venue-qualified id, so a row that only knew its Polymarket conditionId
+// could never have produced a callable Hyperliquid entry. `id` is kept alongside for the
+// Polymarket rows the older read paths still key on.
+//
+// A VENUE THAT FAILS MUST NOT TAKE THE OTHER DOWN WITH IT. The two fetches are independent
+// and each keeps its own last-good slice, so Polymarket going dark leaves the Hyperliquid
+// tab live (and vice versa) instead of emptying the whole board — the failure that would
+// otherwise read to a user as "TAPE is broken" when one third-party API blipped.
+let marketsCache = { at: 0, data: [], venues: {} };
+
+/** Merge one venue's rows into the cache, replacing only that venue's slice. */
+function commitVenue(venue, rows, note) {
+  const others = marketsCache.data.filter((r) => r.venue !== venue);
+  marketsCache = {
+    at: Date.now(),
+    data: others.concat(rows),
+    venues: Object.assign({}, marketsCache.venues, { [venue]: { at: Date.now(), count: rows.length, note: note || null } }),
+  };
+}
+
+function refreshPolymarket() {
   const url = 'https://gamma-api.polymarket.com/markets?closed=false&active=true&order=volume24hr&ascending=false&limit=60';
   https.get(url, (r) => {
     let buf = '';
@@ -62,13 +85,59 @@ function refreshMarkets() {
           if (!(yes >= 0.06 && yes <= 0.94)) continue;
           const v = Number(m.volume24hr) || 0;
           if (v < 50000) continue;
-          out.push({ q: m.question, yes: Math.round(yes * 100) / 100, vol24: Math.round(v), id: m.conditionId });
+          out.push({
+            venue: 'polymarket',
+            market: `polymarket:${m.conditionId}`,
+            q: m.question,
+            yes: Math.round(yes * 100) / 100,
+            vol24: Math.round(v),
+            id: m.conditionId,
+            ends: m.endDate || null,
+          });
         }
-        marketsCache = { at: Date.now(), data: out.slice(0, 24) };
-      } catch (e) { /* keep the last good cache */ }
+        commitVenue('polymarket', out.slice(0, 24));
+      } catch (e) { /* keep the last good slice */ }
     });
-  }).on('error', () => { /* keep the last good cache */ });
+  }).on('error', () => { /* keep the last good slice */ });
 }
+
+function refreshHyperliquid() {
+  hlMarkets().then(({ rows, stats }) => {
+    const out = rows.map((r) => ({
+      venue: 'hyperliquid',
+      market: r.market,
+      q: r.question,
+      yes: Math.round(Number(r.yes) * 100) / 100,
+      // HIP-4 does not publish a 24h notional per outcome on the info endpoint, and inventing
+      // one would put a fabricated number on a receipt. The UI renders the expiry instead.
+      vol24: null,
+      ends: r.ends,
+    }));
+    // An empty Hyperliquid tab is a real state most of the day — the daily contracts sit at
+    // 0.99/0.01 near expiry and get filtered by the same "no opinion left to have" band as
+    // Polymarket. The note makes an empty tab say WHY, so it never reads as a broken fetch.
+    //
+    // EVERY ROW READ MUST BE ACCOUNTED FOR. A first cut listed only three drop reasons and
+    // printed "8 read · 3 priced out · 1 no feed" — four rows unexplained, which is exactly
+    // the ambiguous silence the counted-filter rule exists to prevent. If the reasons ever
+    // stop summing to `read`, the remainder is shown rather than hidden.
+    const named = stats.dropped_priced_out + stats.dropped_no_feed
+      + stats.dropped_expired + stats.dropped_not_binary + stats.dropped_no_price;
+    const parts = [
+      `${stats.read} outcome markets read`,
+      `${stats.dropped_priced_out} priced outside the band`,
+      `${stats.dropped_no_feed} on assets we cannot settle`,
+      `${stats.dropped_not_binary} not binary Yes/No`,
+      `${stats.dropped_expired} past expiry`,
+    ];
+    if (stats.dropped_no_price) parts.push(`${stats.dropped_no_price} with no live price`);
+    if (named !== stats.read) parts.push(`${stats.read - named} unaccounted for`);
+    const note = out.length ? null : parts.join(' · ');
+    commitVenue('hyperliquid', out, note);
+  }).catch(() => { /* keep the last good slice */ });
+}
+
+function refreshMarkets() { refreshPolymarket(); refreshHyperliquid(); }
 
 // ---- display names -----------------------------------------------------------------------
 //
@@ -141,14 +210,16 @@ function loadTitles() { try { TITLES = JSON.parse(fs.readFileSync(path.join(DATA
 loadTitles(); setInterval(loadTitles, 5 * 60 * 1000).unref();
 function titleOf(m) {
   if (TITLES[m] && TITLES[m].title) return TITLES[m].title;
-  const c = marketsCache.data.find((x) => ('polymarket:' + x.id) === m);
+  const c = marketsCache.data.find((x) => x.market === m);
   if (c) return c.q;
   if (m.startsWith('github:')) return m.replace('github:', '').split(':')[0];
-  return m.replace(/^(pyth|demo|delphi|polymarket):/, '').slice(0, 40);
+  return m.replace(/^(pyth|demo|delphi|polymarket|hyperliquid):/, '').slice(0, 40);
 }
 function categorize(m) {
   if (m.startsWith('github:')) return 'Dev';
-  if (/^pyth:|^demo:.*(sol|btc|eth)/i.test(m)) return 'Crypto';
+  // HIP-4 priceBinary markets are crypto price thresholds by construction — categorised on the
+  // id, before titleOf, so a "SOL at or above…" title can never fall through to a keyword match.
+  if (/^pyth:|^hyperliquid:|^demo:.*(sol|btc|eth)/i.test(m)) return 'Crypto';
   const t = titleOf(m).toLowerCase();
   const has = (...ws) => ws.some((w) => t.includes(w));
   // Politics FIRST so "win the nomination" doesn't fall into Sports on "win the".
@@ -262,9 +333,36 @@ async function handleCall(req, res) {
   const handle = v.user && (v.user.username || `tg${v.user.id}`);
   if (!handle) return json(res, 401, { error: 'no telegram user' });
 
-  if (typeof market !== 'string' || !/^polymarket:0x[0-9a-fA-F]{64}$/.test(market)) {
-    return json(res, 400, { error: 'market must be polymarket:<conditionId>' });
+  // The accepted grammars are listed explicitly rather than loosened to "any venue prefix".
+  // This validator is the only thing standing between a tap and an append-only row, and a
+  // permissive regex here would let a caller invent a market id that no resolver can close —
+  // an entry that sits open forever and quietly degrades the one guarantee the record makes.
+  //
+  // THE ASSET LIST IS PART OF THE GRAMMAR, NOT A DETAIL. A first cut here read `[A-Z]{2,6}`
+  // and a test caught it accepting `hyperliquid:…:HYPE:above:56@…` — a market Hyperliquid
+  // really lists, which the resolver then refuses for want of a price feed. That call would
+  // have been appended, anchored, and left open forever. The set below is the settleable set
+  // from lib/hyperliquid.js, imported rather than retyped so the two cannot drift apart.
+  const ASSETS = [...HL_SETTLEABLE].join('|');
+  const CALLABLE = [
+    /^polymarket:0x[0-9a-fA-F]{64}$/,
+    new RegExp(`^hyperliquid:\\d+:(?:${ASSETS}):(?:above|below):[0-9]+(?:\\.[0-9]+)?@\\S+$`),
+  ];
+  if (typeof market !== 'string' || !CALLABLE.some((re) => re.test(market))) {
+    return json(res, 400, { error: 'market must be polymarket:<conditionId> or hyperliquid:<outcome>:<ASSET>:above:<price>@<expiry>' });
   }
+  // A well-formed Hyperliquid id for an ALREADY-EXPIRED market still parses, and TAPE's one
+  // rule is that a claim is anchored before its outcome can be known. The expiry is in the id,
+  // so this is checked from the id itself rather than from the markets cache — a cache-based
+  // check would also reject a perfectly good market that had merely rotated out of the top
+  // slice while the user had the app open, which is a false rejection with no safety value.
+  const hlExpiry = /^hyperliquid:\d+:[A-Z]{2,6}:(?:above|below):[^@]+@(\S+)$/.exec(market);
+  if (hlExpiry) {
+    const ends = Date.parse(hlExpiry[1]);
+    if (!isFinite(ends)) return json(res, 400, { error: 'market expiry is unparseable' });
+    if (ends <= Date.now()) return json(res, 400, { error: 'that market has already expired' });
+  }
+  const offered = marketsCache.data.find((x) => x.market === market);
   if (side !== 'yes' && side !== 'no') return json(res, 400, { error: 'side must be yes|no' });
   const p = Number(price);
   if (!LIVE_PRICE(p)) return json(res, 400, { error: 'price must be between 0 and 1' });
@@ -284,8 +382,7 @@ async function handleCall(req, res) {
   // The title comes from OUR cache of Polymarket's feed, never from the request body — a caller
   // must not be able to choose the words their own receipt renders. It is still an annotation,
   // stamped with a fetch time and marked unsigned everywhere it is shown.
-  const seen = marketsCache.data.find((x) => ('polymarket:' + x.id) === market);
-  if (seen && seen.q) { try { recordTitle(market, seen.q); } catch { /* annotation only — never block a call */ } }
+  if (offered && offered.q) { try { recordTitle(market, offered.q); } catch { /* annotation only — never block a call */ } }
 
   let rec;
   try {
@@ -316,7 +413,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
     if (req.method === 'GET' && u.pathname === '/api/markets') {
-      return json(res, 200, { at: marketsCache.at, markets: marketsCache.data });
+      return json(res, 200, { at: marketsCache.at, markets: marketsCache.data, venues: marketsCache.venues });
     }
     if (req.method === 'GET' && u.pathname === '/api/board') {
       return json(res, 200, { at: boardCache.at, board: boardCache.data });

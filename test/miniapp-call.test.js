@@ -75,4 +75,43 @@ test('an out-of-range price is refused (400)', async () => {
   }
 });
 
+
+// ---- Hyperliquid HIP-4 (added 2026-08-07 with the second venue) -----------------------------
+
+const HL_FUTURE = 'hyperliquid:1019:SOL:above:74.202@2099-01-01T06:00:00Z';
+
+test('a Hyperliquid HIP-4 call is accepted and lands venue-qualified on the chain', async () => {
+  const { code, payload } = await drive({ initData: goodInit, market: HL_FUTURE, side: 'yes', price: 0.42, size: 1 });
+  assert.equal(code, 200, JSON.stringify(payload));
+  const rows = new Chain(path.join(TMP, 'tape.jsonl')).read();
+  const mine = rows.find((r) => r.entry.market === HL_FUTURE);
+  assert.ok(mine, 'the venue-qualified id is what got signed, not a bare slot number');
+});
+
+test('an EXPIRED Hyperliquid market is refused — the outcome is already knowable', async () => {
+  // The one guarantee TAPE makes is that a claim was anchored before its outcome could be
+  // known. The expiry is inside the id, so this is refused without consulting any cache.
+  const before = new Chain(path.join(TMP, 'tape.jsonl')).read().length;
+  const { code } = await drive({
+    initData: goodInit, market: 'hyperliquid:1019:SOL:above:74.202@2020-01-01T06:00:00Z',
+    side: 'yes', price: 0.42, size: 1,
+  });
+  assert.equal(code, 400);
+  assert.equal(new Chain(path.join(TMP, 'tape.jsonl')).read().length, before, 'nothing appended');
+});
+
+test('a bare Hyperliquid slot id is refused — slots are recycled', async () => {
+  // `hyperliquid:1019` means a different question tomorrow. Accepting it would let an old
+  // call re-point at a new market on a record that cannot be corrected.
+  const { code } = await drive({ initData: goodInit, market: 'hyperliquid:1019', side: 'yes', price: 0.42, size: 1 });
+  assert.equal(code, 400);
+});
+
+test('a venue with no resolver cannot be called into existence', async () => {
+  for (const m of ['kalshi:PRES-2028', 'limitless:0xabc', 'hyperliquid:1019:HYPE:above:56@2099-01-01T06:00:00Z']) {
+    const { code } = await drive({ initData: goodInit, market: m, side: 'yes', price: 0.42, size: 1 });
+    assert.equal(code, 400, `${m} should be refused`);
+  }
+});
+
 test('cleanup', () => { fs.rmSync(TMP, { recursive: true, force: true }); });
