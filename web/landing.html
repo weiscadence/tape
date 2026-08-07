@@ -95,9 +95,13 @@
   details[open] summary::after{content:'\2212'}
   .db{padding:0 2px 15px;color:var(--dim);font-size:14px} .db b{color:var(--soft)}
 
-  .cta{display:block;text-align:center;text-decoration:none;background:var(--gold);color:#231600;
+  .cta{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;
+    background:var(--gold);color:#231600;
     font-weight:800;padding:16px;border-radius:13px;margin:26px 0 8px;font-size:16px;
     box-shadow:0 10px 34px rgba(255,176,32,.24)}
+  .cta svg{width:20px;height:20px;flex:0 0 20px}
+  .cta.secondary{background:transparent;color:var(--gold);border:1px solid var(--line);
+    box-shadow:none;margin:0 0 8px;font-size:14px}
   .foot{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);
     font:12px ui-monospace,Menlo,monospace;color:var(--dim)}
   .foot a{color:var(--pop);text-decoration:none}
@@ -183,8 +187,12 @@
   <h1>Anyone screenshots a win.<br>Here you can't hide the <em>losses</em>.</h1>
   <p class="lede">Post a call. It's anchored to Solana and it <b>stays</b>, win or lose. Your track record becomes a receipt nobody can edit.</p>
 
-  <a class="cta" href="/app">See the record →</a>
-  <p class="tiny">no signup · your wallet is your name · one command to post</p>
+  <a class="cta" href="https://t.me/TAPEtapebotbot?startapp">
+    <svg viewBox="0 0 24 24" fill="#231600" aria-hidden="true"><path d="M9.8 15.6l-.4 4.1c.5 0 .8-.2 1.1-.5l2.6-2.5 5.4 3.9c1 .5 1.7.3 1.9-.9l3.5-16.3c.3-1.4-.5-2-1.5-1.6L1.1 9.5C-.3 10 .1 10.9 1.2 11.2l5.1 1.6L18.6 5c.6-.4 1.1-.2.7.2z"/></svg>
+    Start app
+  </a>
+  <a class="cta secondary" href="/app">or open the record on the web →</a>
+  <p class="tiny">no signup · Telegram is your name · one tap to call</p>
 
   <!-- LIVE leaderboard as a printed receipt -->
   <div class="receipt">

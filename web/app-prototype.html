@@ -25,7 +25,14 @@ html,body{margin:0;padding:0;color:var(--ink);
     radial-gradient(90% 70% at 88% 8%, rgba(255,176,32,.07), transparent 55%),
     var(--bg);
   background-attachment:fixed}
-#sky{position:fixed;inset:0;z-index:0;display:block}
+/* Fullscreen while the loader is up; once you're in, the moving graphic lives only in a
+   top band and everything below is solid — per Jiggy's note. */
+/* Loader: the sky sits ABOVE the app (z2) and paints an opaque field, so the whole screen is
+   the constellation with the 3D logo over it. Once you're in, it drops behind (z0) and shrinks
+   to a top band — moving graphic up top, solid below. */
+#sky{position:fixed;inset:0;z-index:2;display:block;transition:height .5s ease}
+body.entered #sky{z-index:0;height:38vh;
+  -webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
 @media (prefers-reduced-motion:reduce){#sky{display:none}}
 .phone{position:relative;z-index:1;max-width:440px;margin:0 auto;min-height:100vh;
   display:flex;flex-direction:column}
@@ -127,10 +134,17 @@ main{flex:1;overflow-y:auto;padding:14px 15px 92px}
 /* login / welcome gate — the first screen when the mini app opens */
 .gate{position:fixed;inset:0;z-index:25;display:flex;flex-direction:column;justify-content:center;
   align-items:center;text-align:center;padding:28px 26px;gap:0;
-  background:radial-gradient(90% 60% at 50% 30%,rgba(240,144,42,.12),transparent 60%),rgba(16,13,9,.86);
-  backdrop-filter:blur(3px);transition:opacity .4s,visibility .4s}
+  /* the sky (z2) paints the opaque field behind this; gate just adds a vignette for legibility */
+  background:radial-gradient(75% 55% at 50% 42%,transparent,rgba(11,9,6,.72) 92%);
+  transition:opacity .5s,visibility .5s}
 .gate.gone{opacity:0;visibility:hidden;pointer-events:none}
-.gate .mark{font-size:64px}
+/* 3D stylized wordmark — amber gradient face + extruded dark shadow stack + a slight tilt */
+.gate .mark{font-size:clamp(76px,26vw,132px);line-height:.86;transform:perspective(600px) rotateX(16deg);
+  text-shadow:0 1px 0 #a5610f,0 2px 0 #9a5a0d,0 3px 0 #8f5310,0 4px 0 #7a460d,0 6px 0 #5f360a,
+    0 10px 22px rgba(0,0,0,.75),0 0 40px rgba(255,176,32,.35);animation:float3d 5s ease-in-out infinite}
+@keyframes float3d{0%,100%{transform:perspective(600px) rotateX(16deg) translateY(0)}
+  50%{transform:perspective(600px) rotateX(16deg) translateY(-8px)}}
+@media (prefers-reduced-motion:reduce){.gate .mark{animation:none}}
 .gate .tl{margin-top:10px;font-size:12px;letter-spacing:.16em;color:var(--amber);text-transform:uppercase}
 .gate .pitch{margin-top:22px;font-size:14px;line-height:1.65;color:var(--ink);max-width:320px}
 .gate .pitch b{color:var(--amber)}
@@ -292,7 +306,11 @@ document.getElementById('mktlist').addEventListener('click', async (e)=>{
   }catch(err){ btn.classList.remove('pick'); toast('Network error — try again',false); }
 });
 
-document.getElementById('enterBtn').onclick=()=>document.getElementById('gate').classList.add('gone');
+document.getElementById('enterBtn').onclick=()=>{
+  document.getElementById('gate').classList.add('gone');
+  document.body.classList.add('entered');           // collapse the sky to a top band
+  setTimeout(()=>window.dispatchEvent(new Event('resize')),520); // recompute canvas size
+};
 
 // reflect the real signed-in handle if Telegram gave us one
 if(HANDLE){document.querySelectorAll('.gate .signin b, .acct .who > b')
