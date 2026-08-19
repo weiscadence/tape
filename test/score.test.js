@@ -292,11 +292,20 @@ t('a YES that misses loses the whole stake, not a fraction of it', () => {
     'resolution:github:o/r/pull/1:merged_by:2026-08-07T00:00:00Z': { ...RES_YES, outcome: 'no' } };
   assert.strictEqual(score([predPos()], marks).scored[0].pnl, '-100');
 });
-t('a NO is priced off (1 − odds), the other side of the same book', () => {
+t('a NO is priced off the price PAID, not off (1 − odds)', () => {
+  // CHANGED 2026-08-19 (Jiggy's ruling). This test used to assert `400` — i.e. that a NO at
+  // entry_ref 0.8 cost 0.2 because entry_ref was read as the market's YES price. That is not
+  // what callers record: they write the price of THEIR OWN side, and the signed notes say so
+  // ('...ourProb NO 0.97'). Under the old reading a near-certainty at 0.97 paid 32.3x, and the
+  // published board total was overstated ~116x with three rows carrying 98.1% of it.
+  //
+  // This test PASSED throughout, which is the point worth remembering: it asserted the
+  // implementation's own convention rather than the meaning of the field, so it could not
+  // detect that the convention was wrong. A test that encodes a misreading defends it.
   const marks = { ...PRED_MARKS,
     'resolution:github:o/r/pull/1:merged_by:2026-08-07T00:00:00Z': { ...RES_YES, outcome: 'no' } };
   const r = score([predPos({ side: 'no' })], marks);
-  assert.strictEqual(r.scored[0].pnl, '400'); // 100/0.2 − 100
+  assert.strictEqual(r.scored[0].pnl, '25'); // 100/0.8 − 100, the price actually paid
 });
 t('spec T0.5: a settled binary pays whether or not the caller closed it', () => {
   // Silence is scored. Leaving a won bet open does not defer the outcome, because the
