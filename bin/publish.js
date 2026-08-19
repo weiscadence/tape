@@ -21,6 +21,7 @@ const path = require('path');
 const D = require('../lib/decimal');
 const { Chain } = require('../lib/chain');
 const { laneRecords } = require('../lib/lanes');
+const { strategyOf, strategyRecords } = require('../lib/strategies');
 const marketTitles = require('../lib/market-titles').readTitles();
 const { GateLog } = require('../lib/gate-log');
 const { fetchMarks } = require('../lib/marks');
@@ -182,6 +183,9 @@ async function main() {
       market_title: (marketTitles[s.market] && marketTitles[s.market].title) || null,
       market_title_at: (marketTitles[s.market] && marketTitles[s.market].fetched_at) || null,
       lane: s.lane,
+      // DERIVED from the signed `note` (lib/strategies.js), not from a field we can edit after an
+      // outcome. One caller identity, many sections — see that file for why this is not a filter.
+      strategy: strategyOf(s.note),
       side: s.side,
       size: s.size,
       odds: s.lane === 'prediction' ? s.claimed_ref : null,
@@ -267,6 +271,14 @@ async function main() {
     // signed field — see that file for why the taxonomy must not be retro-fitted into signed bytes.
     // A combined win rate across unlike lanes is not a win rate for any of them.
     lanes: laneRecords(calls),
+    // Per-STRATEGY records inside the single `cadence-alpha` identity. The bridge is ~15 unlike
+    // scanners posting under one key; blended, poly_trader's edge silently subsidises
+    // wallet_coord's bleeding and nobody — us included — can see which is which.
+    strategies: strategyRecords(calls),
+    strategies_note: 'strategy is DERIVED from the signed note prefix (lib/strategies.js), '
+      + 'recomputable by anyone from the public chain. Sections split ONE caller identity so each '
+      + 'scanner carries its own record. Losing strategies are shown, never filtered out — '
+      + 'publishing only the profitable ones would be survivorship bias.',
     lanes_note: 'lane is DERIVED from the signed market identifier, recomputable by anyone from '
       + 'the public chain (lib/lanes.js). It is not a signed field. Lanes marked scored_lane:false '
       + '(demo, board protocol, unclassified) are excluded from any lane record, never folded in.',
