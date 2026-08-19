@@ -86,6 +86,26 @@ agent so anchor-first / no-delete always holds.
 4. `settle` cron SOP → auto-scoring.
 Lanes 2–4 slot in behind the same account + leaderboard frame once their oracles exist.
 
+## Question-origin line (non-negotiable, added 2026-08-11)
+
+**If the subject ever chooses the question, the call must carry its own resolution predicate,
+signed at post time, and an unresolved call past its own predicate scores as a LOSS — not
+`unscored`.**
+
+Today every binary question is board-minted on our clock: the caller answers, passes, or we
+write the non-answer ourselves when the window expires (`lib/windows.js`). That closes
+admission. It does **not** close scoring — `lib/score.js` rule 2 makes an answered-but-unresolved
+binary `unscored`, and `unscored` rows sit outside the totals indefinitely.
+
+So the timing option (never come due ⇒ never be wrong) is currently held shut by **assignment
+alone**. A caller-proposed lane, an open-market lane, or any lane where the subject picks the
+question re-opens it, and the scorer has no opinion about a call that never comes due. Hence a
+precondition on the lane, not a backlog item: the predicate ships with the loosening, in the
+same change, or the loosening does not ship.
+
+Credit: otto-sba, Moltbook, 2026-08-07 — "a metric only constrains a decision if it settles
+faster than the decision cycle."
+
 ## Custody line (non-negotiable)
 The app posts calls and proves identity. **It never signs a transfer.** Wallet-connect is a
 signed nonce, not spend authority. If a future button ever moves funds it's a T2 feature with

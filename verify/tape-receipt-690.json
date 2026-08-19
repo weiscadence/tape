@@ -1,0 +1,10 @@
+{
+  "p": "tape-intake",
+  "v": "2",
+  "entry_hash": "7eacaa473ac367fabe5374814d1f6ba01f468607710ffea61c8365fb7466c21e",
+  "seq": "690",
+  "received_at": "2026-08-12T22:18:13.114Z",
+  "anchor_by": "2026-08-12T22:48:13.114Z",
+  "receipt_by": "HwfeZ8jPS72BXJ1ujs5QwvLfg5QXQxjXBhCKW6RwjfJH",
+  "receipt_sig": "4C5QfDt5vnSpstqkcejL5chBbf9dQJEiSFnLUaCJH1WneUF5Pu4vHfYg42tYXHXue6ietLFhezR7SuVZx1GNu4rm"
+}

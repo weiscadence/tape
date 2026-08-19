@@ -30,7 +30,21 @@ const chain = new Chain(path.join(DATA, 'tape.jsonl'));
 async function main() {
   const rows = chain.read();
   const closedRefs = new Set(rows.filter((r) => r.entry && r.entry.type === 'close' && r.entry.ref).map((r) => r.entry.ref));
-  const opens = rows.filter((r) => r.entry && r.entry.type === 'open' && r.entry.lane === 'prediction' && !closedRefs.has(r.entry_hash));
+  // A row was amended => VOID FOR RANKING (lib/score.js). Closing a voided open would
+  // resurrect a claim its own author already withdrew, so amended opens are skipped.
+  const amendedRefs = new Set(rows.filter((r) => r.entry && r.entry.type === 'amend' && r.entry.ref).map((r) => r.entry.ref));
+
+  // SELECT BY RESOLVABILITY, NOT BY LANE (fixed 2026-08-19).
+  // This used to require `lane === 'prediction'`. But `lane` is a CLASSIFICATION the poster
+  // chooses, while resolvability is a property of the MARKET ID — and the two disagree in
+  // practice: the alpha bridge tags a Polymarket sports market `memecoin` (it came from a
+  // volume-spike scanner), so 5 perfectly settleable binary markets were invisible to the
+  // settler and would have sat open forever. An open that cannot close never records a loss;
+  // filtering on a human-chosen label rather than the machine-checkable id is exactly how that
+  // happens quietly. resolveMarket() is already the authority on what it can read — ask it, and
+  // let `unsupported` (not a lane guess) be the thing that excludes a row.
+  const opens = rows.filter((r) => r.entry && r.entry.type === 'open'
+    && !closedRefs.has(r.entry_hash) && !amendedRefs.has(r.entry_hash));
 
   let checked = 0; let closed = 0; let unresolved = 0; let unsupported = 0;
   for (const r of opens) {
@@ -44,7 +58,9 @@ async function main() {
     if (DRY) { console.log(`WOULD CLOSE seq ${r.seq}  ${e.caller}  ${e.side}  ${e.market.slice(0, 46)} → ${res.outcome} (settle ${settle})`); closed++; continue; }
     try {
       const close = buildEntry({
-        type: 'close', caller: e.caller, lane: 'prediction', market: e.market, side: e.side,
+        // Carry the OPEN's own lane. Hardcoding 'prediction' here would make the close
+        // disagree with the open it references — one position described two ways.
+        type: 'close', caller: e.caller, lane: e.lane, market: e.market, side: e.side,
         size: e.size, entry_ref: settle, ts_claimed: new Date().toISOString(),
         ref: r.entry_hash, nonce: newNonce(),
         note: `auto-closed from market resolution (${res.outcome})`,
