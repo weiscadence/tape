@@ -66,6 +66,13 @@ boardRow({
   windows_per_caller: 1,
 });
 
+const LATE_EPOCH = '2026-W98';
+boardRow({
+  type: 'schedule_commit', epoch: LATE_EPOCH, seed_commit: seedCommit,
+  catalog_hash: W.catalogHash(), enroll_closes_at: Math.floor(Date.now() / 1000) - 3600,
+  windows_per_caller: 1,
+});
+
 async function req(method, p, body) {
   const r = await fetch(BASE + p, {
     method,
@@ -216,6 +223,12 @@ async function req(method, p, body) {
     assert.strictEqual(st.status, 200);
     assert.strictEqual(st.json.stage, 'questions_minted', JSON.stringify(st.json));
     assert.strictEqual(st.json.enrollment_open, false);
+  });
+  const late98 = await req('GET', `/windows/${LATE_EPOCH}`);
+  t('past-deadline epoch with no close row reports stage enrollment_closed, not enrollment_open', () => {
+    assert.strictEqual(late98.status, 200);
+    assert.strictEqual(late98.json.enrollment_open, false);
+    assert.strictEqual(late98.json.stage, 'enrollment_closed', JSON.stringify(late98.json));
   });
   t('unknown epoch -> 404, never an empty-looking success', async () => {});
   const noSuch = await req('GET', '/windows/2000-W01');

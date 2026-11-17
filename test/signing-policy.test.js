@@ -230,3 +230,16 @@ test('a send that throws still leaves the fee booked — reserving after the fac
     'a failed send can still have paid — the cap must count it');
   delete process.env.TAPE_FEE_LEDGER;
 });
+
+test('fee ledger: concurrent processes cannot jointly exceed the daily cap', async () => {
+  const { spawn } = require('child_process');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tape-fee-race-')), 'ledger.jsonl');
+  const each = Math.floor(P.MAX_FEE_PER_DAY / 3) + 1; // any 3 together exceed the cap, so at most 2 may land
+  const code = `const P=require(${JSON.stringify(path.resolve(__dirname, '../lib/signing-policy'))});` +
+    `try{P.reserveFee({maxFeeLamports:${each},file:${JSON.stringify(file)}});process.exit(0)}catch(e){process.exit(e.code==='fee_cap_day'||/daily fee cap/.test(e.message)?3:1)}`;
+  const run = () => new Promise((r) => spawn(process.execPath, ['-e', code]).on('exit', r));
+  const codes = await Promise.all(Array.from({ length: 8 }, run));
+  const rows = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).length;
+  assert.ok(rows * each <= P.MAX_FEE_PER_DAY, `rows=${rows} each=${each} cap=${P.MAX_FEE_PER_DAY} codes=${codes}`);
+  assert.ok(!codes.includes(1), `unexpected failure codes ${codes}`);
+});

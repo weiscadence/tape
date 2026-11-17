@@ -582,13 +582,16 @@ function windowState(epoch) {
   // the ternary below, a voided epoch with no close row would still report
   // `enrollment_open: true`, and /api/windows is the route agent.json calls START HERE.
   const voided = ofEpoch(rows, epoch, 'schedule_void')[0];
+  // Past the COMMITTED deadline with no close row yet: the write path 409s, so the stage must not
+  // say "enrollment_open" either (it did, while enrollment_open:false sat next to it).
+  const pastDeadline = Math.floor(Date.now() / 1000) > Number(commit.entry.enroll_closes_at);
   return {
     epoch,
-    stage: voided ? 'void' : reveal ? 'questions_minted' : close ? 'awaiting_reveal' : 'enrollment_open',
+    stage: voided ? 'void' : reveal ? 'questions_minted' : close ? 'awaiting_reveal'
+      : pastDeadline ? 'enrollment_closed' : 'enrollment_open',
     // Also false once the COMMITTED deadline has passed: the write path (POST /window/enroll)
     // refuses then, so advertising "open" here told callers to enrol into a guaranteed 409.
-    enrollment_open: !voided && !close
-      && !(Math.floor(Date.now() / 1000) > Number(commit.entry.enroll_closes_at)),
+    enrollment_open: !voided && !close && !pastDeadline,
     void_reason: voided ? voided.entry.reason : null,
     enroll_closes_at: commit.entry.enroll_closes_at,
     windows_per_caller: commit.entry.windows_per_caller,
