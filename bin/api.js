@@ -1007,6 +1007,8 @@ const server = http.createServer(async (req, res) => {
       ok: chain.ok, entries: chain.count, head: chain.head, receipts_signed_by: receiptPub,
     });
   }
+  // `POST /` is an alias of `POST /call`, kept for early clients that posted to the API root.
+  // It is the same handler with the same checks; agent.json and the skill only name /call.
   if (req.method === 'POST' && (url.pathname === '/call' || url.pathname === '/')) {
     try { return await handleCall(req, res); }
     catch (e) { return json(res, 500, { ok: false, error: e.message }); }
