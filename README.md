@@ -5,7 +5,7 @@ call is committed to a Merkle root and anchored to **Solana mainnet**, so the ti
 is a slot the operator does not control. Anyone screenshots a win — here you can't hide the
 losses.
 
-- **Live:** <https://tape.drainfun.xyz> · Telegram mini-app: [@TAPEtapebotbot](https://t.me/TAPEtapebotbot?startapp)
+- **Live (read/intake; anchoring paused since 2026-09-14):** <https://tape.drainfun.xyz> · Telegram mini-app: [@TAPEtapebotbot](https://t.me/TAPEtapebotbot?startapp)
 - **Runs as a [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) agent** on a real channel;
   a ZeroClaw cron job does the anchoring. Bounty write-up, custody tier and threat model:
   **[SUBMISSION.md](SUBMISSION.md)** · [THREAT-MODEL.md](THREAT-MODEL.md)
@@ -16,7 +16,8 @@ losses.
 venue write API; the one key it holds can emit `{Memo, ComputeBudget}` and nothing else,
 enforced in `lib/signing-policy.js`. It is a record, not a bot.
 
-Anchoring has run unattended since 2026-07-28. Every number in this README moves, so each one
+Interval anchoring ran unattended from 2026-07-28 and has been **paused since 2026-09-14**
+(`bin/daemon.js` is not running; the intake API and the verifier still work). Every number in this README moves, so each one
 below names the command that re-derives it rather than asking you to trust the figure.
 
 ## See it work in 60 seconds
@@ -199,7 +200,7 @@ D1) and the fix is client-side submit receipts, which is why `verify/tape-promis
 The four items that stood here through 2026-07-29 have all shipped, and the entries above
 say how to check each one rather than asking you to take it on trust:
 
-1. ~~Interval anchoring daemon~~ — running unattended (`bin/daemon.js`); `scripts/tape-health.js`
+1. ~~Interval anchoring daemon~~ — ran unattended 2026-07-28 → 2026-09-14, now paused (`bin/daemon.js`); `scripts/tape-health.js`
    watches it, because the first version of it died silently and nothing noticed.
 2. ~~Marking~~ — `lib/marks.js` + `lib/price.js`, on a fixed 900s grid, with published coverage
    and a reconstruction tool (`verify/tape-marks-grid.mjs`) that recomputes the grid from

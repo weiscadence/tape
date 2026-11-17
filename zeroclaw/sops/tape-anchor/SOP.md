@@ -1,6 +1,7 @@
 # TAPE interval anchor
 
-Runs every 15 minutes. Anchors first, verifies second.
+Runs when fired by hand or by the agent via `sop_execute` (the SOP has no cron trigger, deliberately, see
+`SOP.toml`; interval anchoring is the `bin/daemon.js` loop). Anchors first, verifies second.
 
 **Anchoring is unconditional and that is a deliberate reversal.** The earlier
 `anchor-now` refused to anchor when any entry failed the eligibility gate. In a daemon

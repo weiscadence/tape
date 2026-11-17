@@ -585,7 +585,10 @@ function windowState(epoch) {
   return {
     epoch,
     stage: voided ? 'void' : reveal ? 'questions_minted' : close ? 'awaiting_reveal' : 'enrollment_open',
-    enrollment_open: !voided && !close,
+    // Also false once the COMMITTED deadline has passed: the write path (POST /window/enroll)
+    // refuses then, so advertising "open" here told callers to enrol into a guaranteed 409.
+    enrollment_open: !voided && !close
+      && !(Math.floor(Date.now() / 1000) > Number(commit.entry.enroll_closes_at)),
     void_reason: voided ? voided.entry.reason : null,
     enroll_closes_at: commit.entry.enroll_closes_at,
     windows_per_caller: commit.entry.windows_per_caller,
